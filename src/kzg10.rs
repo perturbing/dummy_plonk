@@ -1,7 +1,7 @@
+#![allow(non_snake_case)]
 use std::ops::Neg;
 use crate::polynomial::Polynomial;
 use crate::transcript::Transcript;
-#[allow(non_snake_case)]
 use bls12_381::*;
 use ff::Field;
 use group::Curve;
@@ -20,16 +20,14 @@ pub struct Kzg10BatchProof(Kzg10Commitment, Kzg10Commitment);
 
 impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
     pub fn setup() -> Self {
-        // let toxic_waste = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let toxic_waste = Scalar::from(10);
+        let toxic_waste = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
         let mut powers_x_g1 = [G1Affine::default(); MAX_GATES];
         let mut powers_x_g2 = [G2Affine::default(); 2];
 
-        let mut temp_g1 = G1Affine::generator();
-        let mut temp_g2 = G2Affine::generator();
+        powers_x_g2[0] = G2Affine::generator();
+        powers_x_g2[1] = (G2Affine::generator() * toxic_waste).to_affine();
 
-        powers_x_g2[0] = temp_g2;
-        powers_x_g2[1] = (temp_g2 * toxic_waste).to_affine();
+        let mut temp_g1 = G1Affine::generator();
 
         for i in 0..MAX_GATES {
             powers_x_g1[i] = temp_g1;
@@ -93,7 +91,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         for i in 0..len_a {
             let mut temp_poly = polynomials_a[i].clone();
             // we subtract the polynomial evaluated at the evaluation point
-            temp_poly.0[0] - polynomials_a[i].eval(&eval_a);
+            temp_poly.0[0] -= polynomials_a[i].eval(&eval_a);
             // we divide by the monomial X - eval_a
             let poly_division = temp_poly / Polynomial([eval_a.clone().neg(), Scalar::one()]);
             h_x += &poly_division * &gamma_powers;
@@ -106,7 +104,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         for i in 0..len_b {
             let mut temp_poly = polynomials_b[i].clone();
             // we subtract the polynomial evaluated at the evaluation point
-            temp_poly.0[0] - polynomials_b[i].eval(&eval_b);
+            temp_poly.0[0] -= polynomials_b[i].eval(&eval_b);
             // we divide by the monomial X - eval_b
             let poly_division = temp_poly / Polynomial([eval_b.clone().neg(), Scalar::one()]);
             h_prime_x += &poly_division * &gammaprime_powers;
@@ -196,8 +194,7 @@ mod tests {
     #[test]
     fn test_setup() {
         let kzg10 = Kzg10::<SIZE>::setup();
-        // let toxic_waste = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let toxic_waste = Scalar::from(10);
+        let toxic_waste = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
 
         assert_eq!(kzg10.powers_x_g2, [G2Affine::generator(), (toxic_waste * G2Affine::generator()).to_affine()]);
 

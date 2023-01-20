@@ -57,8 +57,6 @@ mod tests {
             &Scalar::random(ChaCha20Rng::from_seed([0u8; 32])),
         );
 
-        let result = transcript.challenge_scalar(b"End");
-
-        assert!(true);
+        let _result = transcript.challenge_scalar(b"End");
     }
 }
