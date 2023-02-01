@@ -1,4 +1,4 @@
-use crate::plonk::{ComputationTrace, PlonkConstraintSystem, PreprocessedInput};
+use crate::plonk::{ComputationTrace, K1, K2, PlonkConstraintSystem, PreprocessedInput};
 use crate::transcript::Transcript;
 use bls12_381::Scalar;
 use rand_core::{OsRng, RngCore};
@@ -44,6 +44,33 @@ impl Prover {
         transcript.append_point(b"commitment c", &commitment_c.0);
 
         // This is the end of Round 1
+
+        // We begin round 2 by computing permutation challenges
+        let beta = transcript.challenge_scalar(b"beta");
+        let gamma = transcript.challenge_scalar(b"gamma");
+
+        // We now compute the permutation polynomial
+        let mut permutation_polynomial = Polynomial(vec![b9, b8, b7]) * &pre_in.blinder_polynomial + pre_in.constraints.lagrange_basis(1);
+        for i in 1..pre_in.constraints.nr_constraints {
+            let mut factor = Scalar::one();
+            for j in 0..i {
+                let numerator = (prover_key.a[j] + beta * pre_in.constraints.powers_omega[j] + gamma) *
+                    (prover_key.b[j] + beta * K1() * pre_in.constraints.powers_omega[j] + gamma) *
+                    (prover_key.c[j] + beta * K2() * pre_in.constraints.powers_omega[j] + gamma);
+                let denominator = (prover_key.a[j] + pre_in.sigma_star.get(&(j)).unwrap() * beta + gamma) *
+                    (prover_key.b[j] + pre_in.sigma_star.get(&(j + pre_in.constraints.nr_constraints)).unwrap() * beta + gamma) *
+                    (prover_key.c[j] + pre_in.sigma_star.get(&(j + 2 * pre_in.constraints.nr_constraints)).unwrap() * beta + gamma);
+                factor *= numerator * denominator.invert().unwrap();
+            }
+            permutation_polynomial += pre_in.constraints.lagrange_basis(i + 1) * factor;
+        }
+
+        let commitment_z = pre_in.kzg_set.commit(&permutation_polynomial);
+
+        transcript.append_point(b"Permutation polynomial", &commitment_z.0);
+
+        // Round 2 is over
+
 
         return PlonkProof;
     }
