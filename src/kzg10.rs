@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-use std::ops::Neg;
 use crate::polynomial::Polynomial;
 use crate::transcript::Transcript;
 use bls12_381::*;
@@ -7,6 +6,7 @@ use ff::Field;
 use group::Curve;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
+use std::ops::Neg;
 
 pub struct Kzg10<const MAX_GATES: usize> {
     powers_x_g1: [G1Affine; MAX_GATES], // This will have as size the max number of gates allowed.
@@ -14,7 +14,7 @@ pub struct Kzg10<const MAX_GATES: usize> {
 }
 
 #[derive(Clone)]
-pub struct Kzg10Commitment(G1Affine);
+pub struct Kzg10Commitment(pub(crate) G1Affine);
 
 pub struct Kzg10BatchProof(Kzg10Commitment, Kzg10Commitment);
 
@@ -40,7 +40,11 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         }
     }
 
-    pub fn commit(&self, polynomial: &Polynomial<MAX_GATES>) -> Kzg10Commitment {
+    pub fn commit(&self, polynomial: &Polynomial) -> Kzg10Commitment {
+        assert!(
+            polynomial.0.len() <= MAX_GATES,
+            "Polynomial degree not supported"
+        );
         let mut commitment = G1Affine::identity();
         for (srs, coefficient) in self.powers_x_g1.iter().zip(polynomial.0.iter()) {
             commitment = (commitment + srs * coefficient).to_affine();
@@ -53,8 +57,8 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
     /// that there are only two distinct evaluation points.
     pub fn batch_prove(
         &self,
-        polynomials_a: &[Polynomial<MAX_GATES>],
-        polynomials_b: &[Polynomial<MAX_GATES>],
+        polynomials_a: &[Polynomial],
+        polynomials_b: &[Polynomial],
         commitments_a: &[Kzg10Commitment],
         commitments_b: &[Kzg10Commitment],
         eval_a: &Scalar,
@@ -63,6 +67,15 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         output_b: &[Scalar],
         transcript: &mut Transcript,
     ) -> Kzg10BatchProof {
+        assert!(
+            polynomials_a.iter().any(|poly| poly.0.len() <= MAX_GATES),
+            "Polynomial degree not supported"
+        );
+        assert!(
+            polynomials_b.iter().any(|poly| poly.0.len() <= MAX_GATES),
+            "Polynomial degree not supported"
+        );
+
         let len_a = commitments_a.len();
         let len_b = commitments_b.len();
         // First we use the transcript to generate two scalars.
@@ -86,19 +99,19 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         let gammaprime = transcript.challenge_scalar(b"gammaprime");
 
         // Now we compute h(X) and h'(X) polynomials
-        let mut h_x = Polynomial::zero();
+        let mut h_x = Polynomial::zero(MAX_GATES);
         let mut gamma_powers = Scalar::one();
         for i in 0..len_a {
             let mut temp_poly = polynomials_a[i].clone();
             // we subtract the polynomial evaluated at the evaluation point
             temp_poly.0[0] -= polynomials_a[i].eval(&eval_a);
             // we divide by the monomial X - eval_a
-            let poly_division = temp_poly / Polynomial([eval_a.clone().neg(), Scalar::one()]);
+            let poly_division = temp_poly / Polynomial(vec![eval_a.clone().neg(), Scalar::one()]);
             h_x += &poly_division * &gamma_powers;
             gamma_powers *= gamma;
         }
 
-        let mut h_prime_x = Polynomial::zero();
+        let mut h_prime_x = Polynomial::zero(MAX_GATES);
 
         let mut gammaprime_powers = Scalar::one();
         for i in 0..len_b {
@@ -106,7 +119,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
             // we subtract the polynomial evaluated at the evaluation point
             temp_poly.0[0] -= polynomials_b[i].eval(&eval_b);
             // we divide by the monomial X - eval_b
-            let poly_division = temp_poly / Polynomial([eval_b.clone().neg(), Scalar::one()]);
+            let poly_division = temp_poly / Polynomial(vec![eval_b.clone().neg(), Scalar::one()]);
             h_prime_x += &poly_division * &gammaprime_powers;
 
             // we update the power of gamma
@@ -159,7 +172,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         for i in 0..len_a {
             F = (F + &commitments_a[i].0 * gamma_powers
                 - (gamma_powers * output_a[i]) * G1Affine::generator())
-                .to_affine();
+            .to_affine();
             gamma_powers *= gamma;
         }
 
@@ -167,12 +180,12 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         for j in 0..len_b {
             F = (F + &commitments_b[j].0 * (rprime * gammaprime_powers)
                 - (rprime * gammaprime_powers * output_b[j]) * G1Affine::generator())
-                .to_affine();
+            .to_affine();
             gammaprime_powers *= gammaprime;
         }
 
-        let lhs_g1 = F + eval_a * proof.0.0 + (rprime * eval_b) * proof.1.0;
-        let rhs_g1 = proof.0.0 + (rprime * proof.1.0);
+        let lhs_g1 = F + eval_a * proof.0 .0 + (rprime * eval_b) * proof.1 .0;
+        let rhs_g1 = proof.0 .0 + (rprime * proof.1 .0);
 
         let lhs_pairing = pairing(&lhs_g1.to_affine(), &G2Affine::generator());
         let rhs_pairing = pairing(&rhs_g1.to_affine(), &self.powers_x_g2[1]);
@@ -185,7 +198,6 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,7 +208,13 @@ mod tests {
         let kzg10 = Kzg10::<SIZE>::setup();
         let toxic_waste = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
 
-        assert_eq!(kzg10.powers_x_g2, [G2Affine::generator(), (toxic_waste * G2Affine::generator()).to_affine()]);
+        assert_eq!(
+            kzg10.powers_x_g2,
+            [
+                G2Affine::generator(),
+                (toxic_waste * G2Affine::generator()).to_affine()
+            ]
+        );
 
         let mut powers_tw = G1Affine::generator();
         for val in kzg10.powers_x_g1 {
@@ -211,17 +229,9 @@ mod tests {
         let mut transcript = Transcript::new(b"Testing KZG10");
         let mut transcript_verifier = Transcript::new(b"Testing KZG10");
 
-        let polynomial1 = Polynomial([
-            Scalar::from(1),
-            Scalar::from(5),
-            Scalar::from(2),
-        ]);
+        let polynomial1 = Polynomial(vec![Scalar::from(1), Scalar::from(5), Scalar::from(2)]);
 
-        let polynomial2 = Polynomial([
-            Scalar::from(4),
-            Scalar::from(5),
-            Scalar::from(3),
-        ]);
+        let polynomial2 = Polynomial(vec![Scalar::from(4), Scalar::from(5), Scalar::from(3)]);
 
         let eval_point1 = Scalar::from(3);
         let eval_point2 = Scalar::from(7);
@@ -240,11 +250,11 @@ mod tests {
             &eval_point2,
             &[result1],
             &[result2],
-            &mut transcript
+            &mut transcript,
         );
 
-        assert!(
-            kzg10.batch_verify(
+        assert!(kzg10
+            .batch_verify(
                 &proof,
                 &[commitment1],
                 &[commitment2],
@@ -253,7 +263,7 @@ mod tests {
                 &[result1],
                 &[result2],
                 &mut transcript_verifier
-            ).is_ok()
-        )
+            )
+            .is_ok())
     }
 }
