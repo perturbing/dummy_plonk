@@ -30,11 +30,11 @@
 // one of these gates increases the total number of wires by 3, so it should be easy
 // to keep the count in our examples.
 #![allow(non_snake_case)]
+use crate::kzg10::Kzg10;
 use crate::polynomial::{Polynomial, PolynomialEvaluationPoints};
 use bls12_381::Scalar;
 use ff::PrimeField;
 use std::collections::HashMap;
-use crate::kzg10::Kzg10;
 
 pub(crate) fn K1() -> Scalar {
     Scalar::from(7_u64)
@@ -46,16 +46,16 @@ pub(crate) fn K2() -> Scalar {
 pub struct ComputationTrace {
     pub(crate) a: Vec<Scalar>,
     pub(crate) b: Vec<Scalar>,
-    pub(crate) c: Vec<Scalar>
+    pub(crate) c: Vec<Scalar>,
 }
 
 #[derive(Clone, Default)]
 pub struct Constraints {
-    qm: Vec<Scalar>,
-    ql: Vec<Scalar>,
-    qr: Vec<Scalar>,
-    qo: Vec<Scalar>,
-    qc: Vec<Scalar>,
+    pub qm: Vec<Scalar>,
+    pub ql: Vec<Scalar>,
+    pub qr: Vec<Scalar>,
+    pub qo: Vec<Scalar>,
+    pub qc: Vec<Scalar>,
 }
 
 #[derive(Clone)]
@@ -105,8 +105,10 @@ impl PlonkCircuit {
 
         // we extend the permutation with the identity permutation
         self.permutations.insert(self.nr_wires, self.nr_wires);
-        self.permutations.insert(self.nr_wires + 1, self.nr_wires + 1);
-        self.permutations.insert(self.nr_wires + 2, self.nr_wires + 2);
+        self.permutations
+            .insert(self.nr_wires + 1, self.nr_wires + 1);
+        self.permutations
+            .insert(self.nr_wires + 2, self.nr_wires + 2);
 
         self.nr_wires += 3;
         self.nr_constraints += 1;
@@ -121,8 +123,10 @@ impl PlonkCircuit {
 
         // we extend the permutation with the identity permutation
         self.permutations.insert(self.nr_wires, self.nr_wires);
-        self.permutations.insert(self.nr_wires + 1, self.nr_wires + 1);
-        self.permutations.insert(self.nr_wires + 2, self.nr_wires + 2);
+        self.permutations
+            .insert(self.nr_wires + 1, self.nr_wires + 1);
+        self.permutations
+            .insert(self.nr_wires + 2, self.nr_wires + 2);
 
         self.nr_wires += 3;
         self.nr_constraints += 1;
@@ -156,8 +160,12 @@ impl PlonkCircuit {
                 0 => {
                     return (
                         *index,
-                        self.powers_omega[0]
-                            .pow_vartime(&[(value % self.nr_constraints) as u64, 0, 0, 0]),
+                        self.powers_omega[0].pow_vartime(&[
+                            (value % self.nr_constraints) as u64,
+                            0,
+                            0,
+                            0,
+                        ]),
                     )
                 }
                 1 => {
@@ -200,10 +208,13 @@ impl PlonkCircuit {
         self.powers_omega = vec![Scalar::one(); self.nr_constraints];
         self.powers_omega[0] = omega.clone();
         for i in 1..self.nr_constraints {
-            self.powers_omega[i] = self.powers_omega[i-1] * omega;
+            self.powers_omega[i] = self.powers_omega[i - 1] * omega;
         }
 
-        assert_eq!(omega.pow_vartime(&[1u64 << self.nr_constraints as u64, 0, 0, 0]), Scalar::one());
+        assert_eq!(
+            omega.pow_vartime(&[1u64 << self.nr_constraints as u64, 0, 0, 0]),
+            Scalar::one()
+        );
 
         self.extended_h_subgroup = vec![Scalar::zero(); self.nr_constraints * 3];
         self.extended_h_subgroup[0] = self.powers_omega[0].clone();
@@ -211,7 +222,8 @@ impl PlonkCircuit {
         self.extended_h_subgroup[self.nr_constraints * 2] = K2() * self.powers_omega[0];
 
         for index in 1..self.nr_constraints {
-            self.extended_h_subgroup[index] = self.extended_h_subgroup[index - 1] * self.powers_omega[0];
+            self.extended_h_subgroup[index] =
+                self.extended_h_subgroup[index - 1] * self.powers_omega[0];
             self.extended_h_subgroup[index + self.nr_constraints] =
                 self.extended_h_subgroup[index] * K1();
             self.extended_h_subgroup[index + self.nr_constraints * 2] =
@@ -236,18 +248,21 @@ impl PlonkCircuit {
         // Next we compute the selector polynomials. This is performed by interpolating
         // the pairs (g^i, q_i), for q_i being elements of the vectors, ql, qr, ..., qc.
         let ql_x = PolynomialEvaluationPoints(
-            self.constraints.ql.iter().zip(self.powers_omega.iter()).map(|(element, power_w)| {
-                (power_w.clone(), element.clone())
-            }).collect()
-        ).interpolate();
+            self.constraints
+                .ql
+                .iter()
+                .zip(self.powers_omega.iter())
+                .map(|(element, power_w)| (power_w.clone(), element.clone()))
+                .collect(),
+        )
+        .interpolate();
 
         let qr_x = PolynomialEvaluationPoints(
             self.constraints
                 .qr
-                .iter().zip(self.powers_omega.iter())
-                .map(|(element, power_w)| {
-                    (power_w.clone(), element.clone())
-                })
+                .iter()
+                .zip(self.powers_omega.iter())
+                .map(|(element, power_w)| (power_w.clone(), element.clone()))
                 .collect(),
         )
         .interpolate();
@@ -255,7 +270,8 @@ impl PlonkCircuit {
         let qc_x = PolynomialEvaluationPoints(
             self.constraints
                 .qc
-                .iter().zip(self.powers_omega.iter())
+                .iter()
+                .zip(self.powers_omega.iter())
                 .map(|(element, power_w)| (power_w.clone(), element.clone()))
                 .collect(),
         )
@@ -264,7 +280,8 @@ impl PlonkCircuit {
         let qm_x = PolynomialEvaluationPoints(
             self.constraints
                 .qm
-                .iter().zip(self.powers_omega.iter())
+                .iter()
+                .zip(self.powers_omega.iter())
                 .map(|(element, power_w)| (power_w.clone(), element.clone()))
                 .collect(),
         )
@@ -273,7 +290,8 @@ impl PlonkCircuit {
         let qo_x = PolynomialEvaluationPoints(
             self.constraints
                 .qo
-                .iter().zip(self.powers_omega.iter())
+                .iter()
+                .zip(self.powers_omega.iter())
                 .map(|(element, power_w)| (power_w.clone(), element.clone()))
                 .collect(),
         )
@@ -283,7 +301,10 @@ impl PlonkCircuit {
         blinder_vec[0] = Scalar::one().neg();
         blinder_vec[1 << self.nr_constraints] = Scalar::one();
         let blinder_polynomial = Polynomial(blinder_vec);
-        assert_eq!(blinder_polynomial.eval(&self.powers_omega[0]), Scalar::zero());
+        assert_eq!(
+            blinder_polynomial.eval(&self.powers_omega[0]),
+            Scalar::zero()
+        );
 
         PreprocessedInput {
             kzg_set: Kzg10::setup(),

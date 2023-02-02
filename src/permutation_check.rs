@@ -68,7 +68,7 @@ impl PermutationArgument {
             let mut eval_points = Vec::with_capacity(n);
             let mut eval_points_perm = Vec::with_capacity(n);
             for i in 1..=n {
-                let mut exponent = [i as u64, 0, 0, 0];
+                let exponent = [i as u64, 0, 0, 0];
                 eval_points.push((
                     Scalar::root_of_unity().pow_vartime(&exponent),
                     Scalar::from(((j - 1) * n + i) as u64),
@@ -102,7 +102,6 @@ impl PermutationArgument {
             "Polynomials need to be equal length"
         );
 
-        let mut result_poly = Polynomial::zero(self.degree);
         let mut z_eval_points = Vec::with_capacity(self.degree);
 
         for poly in f_polys {
@@ -144,14 +143,14 @@ impl PermutationArgument {
                         .invert()
                         .unwrap();
             }
-            let mut exponent = [index as u64, 0, 0, 0];
+            let exponent = [index as u64, 0, 0, 0];
             z_eval_points.push((Scalar::root_of_unity().pow_vartime(&exponent), result));
         }
 
         PolynomialEvaluationPoints(z_eval_points).interpolate()
     }
 
-    pub fn verify(&self, proof: PermutationProof) -> Result<(), ()> {
+    pub fn verify(&self, _proof: PermutationProof) -> Result<(), ()> {
         // TODO: WOW, here we have to verify for each element of the subgroup? This seems a lot. I think
         // here we have the probabilistic part.
         Ok(())

@@ -1,15 +1,19 @@
-use crate::plonk::{ComputationTrace, K1, K2, PlonkConstraintSystem, PreprocessedInput};
+use crate::plonk::{ComputationTrace, PreprocessedInput, K1, K2};
+use crate::polynomial::Polynomial;
 use crate::transcript::Transcript;
 use bls12_381::Scalar;
-use rand_core::{OsRng, RngCore};
-use crate::polynomial::Polynomial;
+// use rand_core::{OsRng, RngCore};
 
 pub struct Prover;
 
 pub struct PlonkProof;
 
 impl Prover {
-    pub fn prove(pre_in: &PreprocessedInput, prover_key: &ComputationTrace, transcript: &mut Transcript) -> PlonkProof {
+    pub fn prove(
+        pre_in: &PreprocessedInput,
+        prover_key: &ComputationTrace,
+        transcript: &mut Transcript,
+    ) -> PlonkProof {
         // We first compute the random scalars, that we don't compute randomly for debugging.
         let (b1, b2, b3, b4, b5, b6, b7, b8, b9) = (
             Scalar::from(7),
@@ -50,19 +54,35 @@ impl Prover {
         let gamma = transcript.challenge_scalar(b"gamma");
 
         // We now compute the permutation polynomial
-        let mut permutation_polynomial = Polynomial(vec![b9, b8, b7]) * &pre_in.blinder_polynomial + pre_in.constraints.lagrange_basis(1);
+        let mut permutation_polynomial = Polynomial(vec![b9, b8, b7]) * &pre_in.blinder_polynomial
+            + pre_in.constraints.lagrange_basis(0);
         for i in 1..pre_in.constraints.nr_constraints {
             let mut factor = Scalar::one();
             for j in 0..i {
-                let numerator = (prover_key.a[j] + beta * pre_in.constraints.powers_omega[j] + gamma) *
-                    (prover_key.b[j] + beta * K1() * pre_in.constraints.powers_omega[j] + gamma) *
-                    (prover_key.c[j] + beta * K2() * pre_in.constraints.powers_omega[j] + gamma);
-                let denominator = (prover_key.a[j] + pre_in.sigma_star.get(&(j)).unwrap() * beta + gamma) *
-                    (prover_key.b[j] + pre_in.sigma_star.get(&(j + pre_in.constraints.nr_constraints)).unwrap() * beta + gamma) *
-                    (prover_key.c[j] + pre_in.sigma_star.get(&(j + 2 * pre_in.constraints.nr_constraints)).unwrap() * beta + gamma);
+                let numerator = (prover_key.a[j]
+                    + beta * pre_in.constraints.powers_omega[j]
+                    + gamma)
+                    * (prover_key.b[j] + beta * K1() * pre_in.constraints.powers_omega[j] + gamma)
+                    * (prover_key.c[j] + beta * K2() * pre_in.constraints.powers_omega[j] + gamma);
+                let denominator =
+                    (prover_key.a[j] + pre_in.sigma_star.get(&(j)).unwrap() * beta + gamma)
+                        * (prover_key.b[j]
+                            + pre_in
+                                .sigma_star
+                                .get(&(j + pre_in.constraints.nr_constraints))
+                                .unwrap()
+                                * beta
+                            + gamma)
+                        * (prover_key.c[j]
+                            + pre_in
+                                .sigma_star
+                                .get(&(j + 2 * pre_in.constraints.nr_constraints))
+                                .unwrap()
+                                * beta
+                            + gamma);
                 factor *= numerator * denominator.invert().unwrap();
             }
-            permutation_polynomial += pre_in.constraints.lagrange_basis(i + 1) * factor;
+            permutation_polynomial += pre_in.constraints.lagrange_basis(i) * factor;
         }
 
         let commitment_z = pre_in.kzg_set.commit(&permutation_polynomial);
@@ -71,19 +91,65 @@ impl Prover {
 
         // Round 2 is over
 
+        // We begin round 3 by computing the challenge
+        let alpha = transcript.challenge_scalar(b"alpha");
 
+        // We now compute the quotient polynomial. For simplicity of the example we are not using public
+        // inputs. todo: If we want to use PIs, change this.
+        let first = &a_poly * &b_poly * &pre_in.qm_x
+            + &a_poly * &pre_in.ql_x
+            + &b_poly * &pre_in.qr_x
+            + &c_poly * &pre_in.qo_x
+            + &pre_in.qc_x;
+        assert_eq!(
+            first.eval(&pre_in.constraints.powers_omega[3]),
+            Scalar::zero()
+        );
+        let second = (&a_poly + Polynomial(vec![gamma, beta]))
+            * (&b_poly + Polynomial(vec![gamma, beta * K1()]))
+            * (&c_poly + Polynomial(vec![gamma, beta * K2()]))
+            * &permutation_polynomial
+            * alpha;
+        // assert_eq!(
+        //     second.eval(&pre_in.constraints.powers_omega[0]),
+        //     Scalar::zero()
+        // );
+        let third = (&a_poly + &pre_in.qs1_x * beta + gamma)
+            * (&b_poly + &pre_in.qs2_x * beta + gamma)
+            * (&c_poly + &pre_in.qs3_x * beta + gamma)
+            * &pre_in
+                .blinder_polynomial
+                .scale(pre_in.constraints.powers_omega[0])
+            * alpha;
+        assert_eq!(
+            third.eval(&pre_in.constraints.powers_omega[0]),
+            Scalar::zero()
+        );
+        let fourth = (&pre_in.blinder_polynomial + Scalar::one().neg())
+            * &pre_in.constraints.lagrange_basis(0)
+            * alpha
+            * alpha;
+        assert_eq!(
+            fourth.eval(&pre_in.constraints.powers_omega[0]),
+            Scalar::zero()
+        );
+        let quotient_poly = (first + second - third + fourth) / pre_in.blinder_polynomial.clone();
+
+        assert_eq!(
+            quotient_poly.eval(&pre_in.constraints.powers_omega[0]),
+            Scalar::zero()
+        );
         return PlonkProof;
     }
 }
 
-
 // TODO: A la hora de hacer el prover, meter asserts de que el quotient poly es zero.
 #[cfg(test)]
 mod test {
-    use bls12_381::Scalar;
     use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
     use crate::prover::Prover;
     use crate::transcript::Transcript;
+    use bls12_381::Scalar;
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace) {
         // We are going to begin with a simple proof, showing that I know the value of
@@ -105,17 +171,40 @@ mod test {
 
         // as a computation trace, we'll create the proof for the values (3,4,5)
         let computation_trace = ComputationTrace {
-            a: vec![Scalar::from(3), Scalar::from(4), Scalar::from(5), Scalar::from(9)],
-            b: vec![Scalar::from(3), Scalar::from(4), Scalar::from(5), Scalar::from(16)],
-            c: vec![Scalar::from(9), Scalar::from(16), Scalar::from(25), Scalar::from(25)]
+            a: vec![
+                Scalar::from(3),
+                Scalar::from(4),
+                Scalar::from(5),
+                Scalar::from(9),
+            ],
+            b: vec![
+                Scalar::from(3),
+                Scalar::from(4),
+                Scalar::from(5),
+                Scalar::from(16),
+            ],
+            c: vec![
+                Scalar::from(9),
+                Scalar::from(16),
+                Scalar::from(25),
+                Scalar::from(25),
+            ],
         };
+        // // Helpful for debugging
+        // let size = circuit.constraints.qm.len();
+        // let zero_vec = vec![Scalar::zero(); size];
+        // circuit.constraints.qm = zero_vec.clone();
+        // circuit.constraints.ql = zero_vec.clone();
+        // circuit.constraints.qr = zero_vec.clone();
+        // circuit.constraints.qo = zero_vec.clone();
+        // circuit.constraints.qc = zero_vec.clone();
 
         (circuit.setup(), computation_trace)
     }
     #[test]
-    fn test_prover(){
+    fn test_prover() {
         let mut transcript = Transcript::new(b"testing the prover");
         let (pre_in, trace) = create_dummy_circuit_and_prover_key();
-        let proof = Prover::prove(&pre_in, &trace, &mut transcript);
+        let _proof = Prover::prove(&pre_in, &trace, &mut transcript);
     }
 }

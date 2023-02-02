@@ -1,10 +1,7 @@
 use crate::*;
 use bls12_381::Scalar;
 use std::cmp::min;
-use std::collections::HashMap;
-use std::ops::{Add, AddAssign, Div, Mul, MulAssign};
-#[macro_use]
-use crate::macros::*;
+use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Sub};
 
 // Polynomial written as p(x) = a0 + x * a1 + .. + x^{MAX_DEGREE} * a_{MAX_DEGREE}, where we always pad with zeroes.
 #[derive(Clone)]
@@ -27,6 +24,28 @@ impl Polynomial {
     pub fn zero(degree: usize) -> Self {
         Self(vec![Scalar::zero(); degree])
     }
+
+    /// Scale by constant. i.e. compute f(X * c)
+    pub fn scale(&self, val: Scalar) -> Self {
+        let mut result = self.clone();
+        let mut power = Scalar::one();
+        for coeff in result.0.iter_mut() {
+            *coeff *= power;
+            power *= val; // unnecessary mult at end, but well, who cares?
+        }
+        result
+    }
+
+    fn remove_zeros(&mut self) {
+        let mut cut = 0;
+        for &coeff in self.0.iter().rev() {
+            if coeff != Scalar::zero() {
+                break;
+            }
+            cut += 1;
+        }
+        self.0 = self.0[..self.0.len() - cut].to_vec();
+    }
 }
 
 impl<'a, 'b> Add<&'b Polynomial> for &'a Polynomial {
@@ -48,6 +67,26 @@ impl<'a, 'b> Add<&'b Polynomial> for &'a Polynomial {
 }
 
 define_add_variants!(LHS = Polynomial, RHS = Polynomial, Output = Polynomial);
+
+impl<'a, 'b> Sub<&'b Polynomial> for &'a Polynomial {
+    type Output = Polynomial;
+
+    fn sub(self, rhs: &'b Polynomial) -> Self::Output {
+        let min_degree = min(self.0.len(), rhs.0.len());
+        let mut result = if self.0.len() > rhs.0.len() {
+            self.clone()
+        } else {
+            rhs.clone()
+        };
+        for index in 0..min_degree {
+            result.0[index] = self.0[index] - rhs.0[index]
+        }
+
+        result
+    }
+}
+
+define_sub_variants!(LHS = Polynomial, RHS = Polynomial, Output = Polynomial);
 
 impl<'b> AddAssign<&'b Polynomial> for Polynomial {
     fn add_assign(&mut self, rhs: &'b Self) {
@@ -110,26 +149,32 @@ impl<'b> MulAssign<&'b Polynomial> for Polynomial {
 define_mul_assign_variants!(LHS = Polynomial, RHS = Polynomial);
 
 // The following division algorithm is not generic. It's a simplification given that we
-// know we are only going to use this with a monomial as a denominator.
-// AND we know that the coefficient of the highest power is 1. todo: for now
+// know we are only going to use this with a monomial of the form X^n - 1 as a denominator.
+// todo: for now
 impl Div<Polynomial> for Polynomial {
     type Output = Polynomial;
 
     fn div(self, rhs: Polynomial) -> Self::Output {
-        if rhs.0[1] != Scalar::one() {
-            panic!("Unexpected denominator");
-        }
+        let mut copy_rhs = rhs.clone();
+        let mut copy_self = self.clone();
+        copy_rhs.remove_zeros();
+        copy_self.remove_zeros();
 
-        if rhs.0.len() != 2 {
-            panic!("Unexpected denominator");
-        }
+        assert_eq!(
+            copy_rhs.0[copy_rhs.0.len() - 1],
+            Scalar::one(),
+            "unexpected denominator"
+        );
 
-        let mut result = Polynomial::zero(self.0.len());
-        let mut carryover = Scalar::zero();
-        for i in (1..self.0.len()).rev() {
-            result.0[i - 1] = self.0[i] - carryover;
-            carryover = result.0[i - 1] * rhs.0[0];
+        let mut result = Polynomial::zero(copy_self.0.len());
+        for i in (1..copy_self.0.len()).rev() {
+            result.0[i - (copy_rhs.0.len() - 1)] = self.0[i] + -(result.0[i] * rhs.0[0]);
+
+            if i == copy_rhs.0.len() - 1 {
+                break;
+            }
         }
+        result.remove_zeros();
 
         result
     }
@@ -185,18 +230,19 @@ mod tests {
     #[test]
     fn test_division() {
         let poly1 = Polynomial(vec![
-            Scalar::from(180),
-            Scalar::from(3),
+            Scalar::from(9),
+            Scalar::from(9),
+            Scalar::from(55).neg(),
             Scalar::from(2),
             Scalar::from(7),
         ]);
         let poly2 = Polynomial(vec![Scalar::from(3), Scalar::from(1)]);
 
         let poly3 = Polynomial(vec![
-            Scalar::from(60),
+            Scalar::from(3),
+            Scalar::from(2),
             Scalar::from(19).neg(),
             Scalar::from(7),
-            Scalar::zero(),
         ]);
         let div = poly1 / poly2;
 
