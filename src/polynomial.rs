@@ -4,7 +4,7 @@ use std::cmp::min;
 use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Sub};
 
 // Polynomial written as p(x) = a0 + x * a1 + .. + x^{MAX_DEGREE} * a_{MAX_DEGREE}, where we always pad with zeroes.
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Polynomial(pub(crate) Vec<Scalar>);
 
 impl Polynomial {

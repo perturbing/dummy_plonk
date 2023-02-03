@@ -86,7 +86,7 @@ impl PermutationArgument {
             polynomials,
             permuted_polys,
             degree: n,
-            nth_root_unity: Scalar::root_of_unity().pow_vartime(&[1u64 << (32 - n), 0, 0, 0]),
+            nth_root_unity: Scalar::root_of_unity().pow_vartime(&[(1u64 << 32) / n as u64, 0, 0, 0]),
         }
     }
 

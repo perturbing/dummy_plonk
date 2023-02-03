@@ -14,23 +14,24 @@ impl Prover {
         prover_key: &ComputationTrace,
         transcript: &mut Transcript,
     ) -> PlonkProof {
-        // We first compute the random scalars, that we don't compute randomly for debugging.
-        let (b1, b2, b3, b4, b5, b6, b7, b8, b9) = (
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-            Scalar::from(7),
-        );
+        // todo: remove for now
+        // // We first compute the random scalars, that we don't compute randomly for debugging.
+        // let (b1, b2, b3, b4, b5, b6, b7, b8, b9) = (
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        //     Scalar::from(7),
+        // );
 
         // Now we compute the wire scalar:
-        let mut a_poly = Polynomial(vec![b2, b1]) * &pre_in.blinder_polynomial;
-        let mut b_poly = Polynomial(vec![b4, b3]) * &pre_in.blinder_polynomial;
-        let mut c_poly = Polynomial(vec![b6, b5]) * &pre_in.blinder_polynomial;
+        let mut a_poly = Polynomial::zero(pre_in.constraints.nr_constraints); //Polynomial(vec![b2, b1]) * &pre_in.blinder_polynomial;
+        let mut b_poly = Polynomial::zero(pre_in.constraints.nr_constraints); //Polynomial(vec![b4, b3]) * &pre_in.blinder_polynomial;
+        let mut c_poly = Polynomial::zero(pre_in.constraints.nr_constraints); //Polynomial(vec![b6, b5]) * &pre_in.blinder_polynomial;
 
         for index in 0..pre_in.constraints.nr_constraints {
             let lb = pre_in.constraints.lagrange_basis(index);
@@ -54,32 +55,13 @@ impl Prover {
         let gamma = transcript.challenge_scalar(b"gamma");
 
         // We now compute the permutation polynomial
-        let mut permutation_polynomial = Polynomial(vec![b9, b8, b7]) * &pre_in.blinder_polynomial
-            + pre_in.constraints.lagrange_basis(0);
+        let mut permutation_polynomial = // Polynomial(vec![b9, b8, b7]) * &pre_in.blinder_polynomial +
+            pre_in.constraints.lagrange_basis(0);
         for i in 1..pre_in.constraints.nr_constraints {
             let mut factor = Scalar::one();
             for j in 0..i {
-                let numerator = (prover_key.a[j]
-                    + beta * pre_in.constraints.powers_omega[j]
-                    + gamma)
-                    * (prover_key.b[j] + beta * K1() * pre_in.constraints.powers_omega[j] + gamma)
-                    * (prover_key.c[j] + beta * K2() * pre_in.constraints.powers_omega[j] + gamma);
-                let denominator =
-                    (prover_key.a[j] + pre_in.sigma_star.get(&(j)).unwrap() * beta + gamma)
-                        * (prover_key.b[j]
-                            + pre_in
-                                .sigma_star
-                                .get(&(j + pre_in.constraints.nr_constraints))
-                                .unwrap()
-                                * beta
-                            + gamma)
-                        * (prover_key.c[j]
-                            + pre_in
-                                .sigma_star
-                                .get(&(j + 2 * pre_in.constraints.nr_constraints))
-                                .unwrap()
-                                * beta
-                            + gamma);
+                let numerator = (prover_key.a[j] + beta * pre_in.constraints.extended_h_subgroup[j] + gamma) * (prover_key.b[j] + beta * K1() * pre_in.constraints.extended_h_subgroup[j] + gamma) * (prover_key.c[j] + beta * K2() * pre_in.constraints.extended_h_subgroup[j] + gamma);
+                let denominator = (prover_key.a[j] + pre_in.sigma_star.get(&(j)).unwrap() * beta + gamma) * (prover_key.b[j] + pre_in.sigma_star.get(&(j + pre_in.constraints.nr_constraints)).unwrap() * beta + gamma) * (prover_key.c[j] + pre_in.sigma_star.get(&(j + 2 * pre_in.constraints.nr_constraints)).unwrap() * beta + gamma);
                 factor *= numerator * denominator.invert().unwrap();
             }
             permutation_polynomial += pre_in.constraints.lagrange_basis(i) * factor;
@@ -101,46 +83,42 @@ impl Prover {
             + &b_poly * &pre_in.qr_x
             + &c_poly * &pre_in.qo_x
             + &pre_in.qc_x;
-        assert_eq!(
-            first.eval(&pre_in.constraints.powers_omega[3]),
-            Scalar::zero()
-        );
+        assert!(check_subrgoup_zero(&pre_in.constraints.extended_h_subgroup[..pre_in.constraints.nr_constraints], &first));
+
         let second = (&a_poly + Polynomial(vec![gamma, beta]))
             * (&b_poly + Polynomial(vec![gamma, beta * K1()]))
             * (&c_poly + Polynomial(vec![gamma, beta * K2()]))
             * &permutation_polynomial
             * alpha;
-        // assert_eq!(
-        //     second.eval(&pre_in.constraints.powers_omega[0]),
-        //     Scalar::zero()
-        // );
+
         let third = (&a_poly + &pre_in.qs1_x * beta + gamma)
             * (&b_poly + &pre_in.qs2_x * beta + gamma)
             * (&c_poly + &pre_in.qs3_x * beta + gamma)
-            * &pre_in
-                .blinder_polynomial
-                .scale(pre_in.constraints.powers_omega[0])
+            * &permutation_polynomial
+                .scale(pre_in.constraints.extended_h_subgroup[0])
             * alpha;
-        assert_eq!(
-            third.eval(&pre_in.constraints.powers_omega[0]),
-            Scalar::zero()
-        );
-        let fourth = (&pre_in.blinder_polynomial + Scalar::one().neg())
+        assert!(check_subrgoup_zero(&pre_in.constraints.extended_h_subgroup[..pre_in.constraints.nr_constraints], &(&second - &third)));
+
+        let fourth = (&permutation_polynomial + Scalar::one().neg())
             * &pre_in.constraints.lagrange_basis(0)
             * alpha
             * alpha;
-        assert_eq!(
-            fourth.eval(&pre_in.constraints.powers_omega[0]),
-            Scalar::zero()
-        );
-        let quotient_poly = (first + second - third + fourth) / pre_in.blinder_polynomial.clone();
+        assert!(check_subrgoup_zero(&pre_in.constraints.extended_h_subgroup[..pre_in.constraints.nr_constraints], &fourth));
+
+        let quotient_poly = (&first + &second - &third + &fourth) / pre_in.blinder_polynomial.clone();
+        // assert_eq!(&quotient_poly * pre_in.blinder_polynomial.clone(), first + second - third + fourth);
 
         assert_eq!(
-            quotient_poly.eval(&pre_in.constraints.powers_omega[0]),
+            quotient_poly.eval(&pre_in.constraints.extended_h_subgroup[3]),
             Scalar::zero()
         );
         return PlonkProof;
     }
+}
+
+// We use this function to check that a polynomial is zero in all the set H.
+fn check_subrgoup_zero(h_subgroup: &[Scalar], poly: &Polynomial) -> bool {
+    h_subgroup.iter().all(|val| poly.eval(&val) == Scalar::zero())
 }
 
 // TODO: A la hora de hacer el prover, meter asserts de que el quotient poly es zero.
@@ -162,12 +140,12 @@ mod test {
         circuit.mult_gate(); // y * y = y^2
         circuit.mult_gate(); // z * z = z^2
         circuit.add_gate(); // x^2 + y^2 = z^2
-        circuit.connect_wires(&0, &4); // todo: index at zero or 1 :thinking-face:
-        circuit.connect_wires(&8, &3);
-        circuit.connect_wires(&1, &5);
-        circuit.connect_wires(&9, &7);
-        circuit.connect_wires(&2, &6);
-        circuit.connect_wires(&10, &11);
+        // circuit.connect_wires(&0, &4); // todo: index at zero or 1 :thinking-face:
+        // circuit.connect_wires(&8, &3);
+        // circuit.connect_wires(&1, &5);
+        // circuit.connect_wires(&9, &7);
+        // circuit.connect_wires(&2, &6);
+        // circuit.connect_wires(&10, &11);
 
         // as a computation trace, we'll create the proof for the values (3,4,5)
         let computation_trace = ComputationTrace {
