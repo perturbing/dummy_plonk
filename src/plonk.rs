@@ -155,7 +155,7 @@ impl PlonkCircuit {
     pub fn compute_sigma_star(&self) -> HashMap<usize, Scalar> {
         self.permutations
             .iter()
-            .map(|(index, value)| match (index) / self.nr_constraints {
+            .map(|(index, value)| match index / self.nr_constraints {
                 0 => {
                     return (
                         *index,

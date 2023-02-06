@@ -36,7 +36,7 @@ impl Polynomial {
         result
     }
 
-    fn remove_zeros(&mut self) {
+    pub fn remove_zeros(&mut self) {
         let mut cut = 0;
         for &coeff in self.0.iter().rev() {
             if coeff != Scalar::zero() {
