@@ -1,5 +1,7 @@
-use bls12_381::{pairing, Scalar};
+use std::ops::Neg;
+use blstrs::{pairing, Scalar};
 use group::Curve;
+use ff::Field;
 use crate::kzg10::Kzg10Commitment;
 use crate::plonk::{K1, K2, PreprocessedInput};
 use crate::polynomial::Polynomial;
@@ -65,7 +67,7 @@ impl PlonkVerifier {
 
         let batch_poly_commit_full = batch_poly_commit_1 + v * (&proof.a + v * (&proof.b + v * (&proof.c + v * (&s_sig1 + v * (&s_sig2)))));
 
-        let group_encoded_batch_eval = (r0.neg() + v * (&proof.a_eval + v * (&proof.b_eval + v * (&proof.c_eval + v * (&proof.s_sig1 + v * (&proof.s_sig2))))) + u * proof.z_omega) * &pre_in.kzg_set.powers_x_g1[0];
+        let group_encoded_batch_eval = &pre_in.kzg_set.powers_x_g1[0] * (r0.neg() + v * (&proof.a_eval + v * (&proof.b_eval + v * (&proof.c_eval + v * (&proof.s_sig1 + v * (&proof.s_sig2))))) + u * proof.z_omega);
 
         let lhs_g1 = &proof.w_omega + u * &proof.w_omega_zeta;
         let rhs_g2 = zeta * &proof.w_omega + u * zeta * pre_in.constraints.extended_h_subgroup[0] * &proof.w_omega_zeta + batch_poly_commit_full + Kzg10Commitment(group_encoded_batch_eval.to_affine());
@@ -86,7 +88,7 @@ mod test {
     use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
     use crate::prover::Prover;
     use crate::transcript::Transcript;
-    use bls12_381::Scalar;
+    use blstrs::Scalar;
     use crate::verifier::PlonkVerifier;
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace) {

@@ -1,7 +1,8 @@
 use crate::*;
-use bls12_381::Scalar;
+use blstrs::Scalar;
+use ff::Field;
 use std::cmp::min;
-use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Sub};
+use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub};
 
 // Polynomial written as p(x) = a0 + x * a1 + .. + x^{MAX_DEGREE} * a_{MAX_DEGREE}, where we always pad with zeroes.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -209,8 +210,7 @@ impl PolynomialEvaluationPoints {
 
 #[cfg(test)]
 mod tests {
-    use crate::polynomial::{Polynomial, PolynomialEvaluationPoints};
-    use bls12_381::Scalar;
+    use super::*;
 
     #[test]
     fn eval() {

@@ -32,9 +32,10 @@
 #![allow(non_snake_case)]
 use crate::kzg10::Kzg10;
 use crate::polynomial::{Polynomial, PolynomialEvaluationPoints};
-use bls12_381::Scalar;
-use ff::PrimeField;
+use blstrs::Scalar;
+use ff::{Field, PrimeField};
 use std::collections::HashMap;
+use std::ops::Neg;
 
 pub(crate) fn K1() -> Scalar {
     Scalar::from(7_u64)

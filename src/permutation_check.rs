@@ -16,8 +16,8 @@
 
 use crate::polynomial::{Polynomial, PolynomialEvaluationPoints};
 use crate::transcript::Transcript;
-use bls12_381::Scalar;
-use ff::PrimeField;
+use blstrs::Scalar;
+use ff::{Field, PrimeField};
 use std::collections::{HashMap, HashSet};
 
 // There is k of them, of degree n-1

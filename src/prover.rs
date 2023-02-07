@@ -1,8 +1,10 @@
+use std::ops::Neg;
 use crate::plonk::{ComputationTrace, PreprocessedInput, K1, K2};
 use crate::polynomial::Polynomial;
 use crate::transcript::Transcript;
-use bls12_381::Scalar;
+use blstrs::Scalar;
 use crate::kzg10::{Kzg10, Kzg10Commitment};
+use ff::Field;
 // use rand_core::{OsRng, RngCore};
 
 pub struct Prover;
@@ -223,7 +225,7 @@ mod test {
     use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
     use crate::prover::Prover;
     use crate::transcript::Transcript;
-    use bls12_381::Scalar;
+    use blstrs::Scalar;
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace) {
         // We are going to begin with a simple proof, showing that I know the value of

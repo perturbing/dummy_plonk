@@ -1,5 +1,5 @@
 use blake2::{Blake2b, Digest};
-use bls12_381::{G1Affine, Scalar};
+use blstrs::{G1Affine, Scalar};
 
 #[derive(Clone)]
 pub struct Transcript(Blake2b);
@@ -28,14 +28,14 @@ impl Transcript {
 
     pub fn append_scalar(&mut self, label: &'static [u8], message: &Scalar) {
         self.0.update(label);
-        self.0.update(&message.to_bytes());
+        self.0.update(&message.to_bytes_be());
     }
 
     pub fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
         let mut scalar_bytes = [0u8; 32];
         self.0.update(label);
-        scalar_bytes[..31].copy_from_slice(&self.clone().0.finalize().to_vec()[..31]);
-        Scalar::from_bytes(&scalar_bytes).unwrap()
+        scalar_bytes[1..].copy_from_slice(&self.clone().0.finalize().to_vec()[1..32]);
+        Scalar::from_bytes_be(&scalar_bytes).unwrap()
     }
 }
 
@@ -43,6 +43,7 @@ impl Transcript {
 mod tests {
     use super::*;
     use crate::transcript::Transcript;
+    use group::prime::PrimeCurveAffine;
     use ff::Field;
     use rand_chacha::ChaCha20Rng;
     use rand_core::SeedableRng;
