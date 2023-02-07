@@ -6,11 +6,12 @@ use ff::Field;
 use group::Curve;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
-use std::ops::Neg;
+use std::ops::{Add, Mul, Neg};
+use crate::{define_add_variants, define_mul_variants};
 
 pub struct Kzg10<const MAX_GATES: usize> {
-    powers_x_g1: [G1Affine; MAX_GATES], // This will have as size the max number of gates allowed.
-    powers_x_g2: [G2Affine; 2],         // we only have power 0 and 1
+    pub powers_x_g1: [G1Affine; MAX_GATES], // This will have as size the max number of gates allowed.
+    pub powers_x_g2: [G2Affine; 2],         // we only have power 0 and 1
 }
 
 #[derive(Clone)]
@@ -197,6 +198,37 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         }
     }
 }
+
+impl<'a, 'b> Add<&'b Kzg10Commitment> for &'b Kzg10Commitment {
+    type Output = Kzg10Commitment;
+
+    fn add(self, rhs: &'b Kzg10Commitment) -> Self::Output {
+        Kzg10Commitment((self.0 + G1Projective::from(&rhs.0)).to_affine())
+    }
+}
+
+define_add_variants!(LHS = Kzg10Commitment, RHS = Kzg10Commitment, Output = Kzg10Commitment);
+
+impl<'a, 'b> Mul<&'b Scalar> for &'b Kzg10Commitment {
+    type Output = Kzg10Commitment;
+
+    fn mul(self, rhs: &'b Scalar) -> Self::Output {
+        Kzg10Commitment((self.0 * rhs).to_affine())
+    }
+}
+
+define_mul_variants!(LHS = Kzg10Commitment, RHS = Scalar, Output = Kzg10Commitment);
+
+
+impl<'a, 'b> Mul<&'b Kzg10Commitment> for &'b Scalar {
+    type Output = Kzg10Commitment;
+
+    fn mul(self, rhs: &'b Kzg10Commitment) -> Self::Output {
+        rhs * self
+    }
+}
+
+define_mul_variants!(LHS = Scalar, RHS = Kzg10Commitment, Output = Kzg10Commitment);
 
 #[cfg(test)]
 mod tests {

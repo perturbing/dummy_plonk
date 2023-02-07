@@ -9,3 +9,4 @@ mod transcript;
 mod macros;
 
 mod prover;
+mod verifier;

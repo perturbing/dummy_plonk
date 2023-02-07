@@ -8,21 +8,21 @@ use crate::kzg10::{Kzg10, Kzg10Commitment};
 pub struct Prover;
 
 pub struct PlonkProof {
-    a: Kzg10Commitment,
-    b: Kzg10Commitment,
-    c: Kzg10Commitment,
-    z: Kzg10Commitment,
-    t_low: Kzg10Commitment,
-    t_mid: Kzg10Commitment,
-    t_high: Kzg10Commitment,
-    w_omega: Kzg10Commitment,
-    w_omega_zeta: Kzg10Commitment,
-    a_eval: Scalar,
-    b_eval: Scalar,
-    c_eval: Scalar,
-    s_sig1: Scalar,
-    s_sig2: Scalar,
-    z_omega: Scalar,
+    pub a: Kzg10Commitment,
+    pub b: Kzg10Commitment,
+    pub c: Kzg10Commitment,
+    pub z: Kzg10Commitment,
+    pub t_low: Kzg10Commitment,
+    pub t_mid: Kzg10Commitment,
+    pub t_high: Kzg10Commitment,
+    pub w_omega: Kzg10Commitment,
+    pub w_omega_zeta: Kzg10Commitment,
+    pub a_eval: Scalar,
+    pub b_eval: Scalar,
+    pub c_eval: Scalar,
+    pub s_sig1: Scalar,
+    pub s_sig2: Scalar,
+    pub z_omega: Scalar,
 }
 
 impl Prover {
