@@ -1,14 +1,14 @@
 #![allow(non_snake_case)]
 use crate::polynomial::Polynomial;
 use crate::transcript::Transcript;
+use crate::{define_add_variants, define_mul_variants};
 use blstrs::*;
+use ff::Field;
+use group::prime::PrimeCurveAffine;
+use group::Curve;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use std::ops::{Add, Mul, Neg};
-use ff::Field;
-use group::Curve;
-use group::prime::PrimeCurveAffine;
-use crate::{define_add_variants, define_mul_variants};
 
 pub struct Kzg10<const MAX_GATES: usize> {
     pub powers_x_g1: [G1Affine; MAX_GATES], // This will have as size the max number of gates allowed.
@@ -31,8 +31,8 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
 
         let mut temp_g1 = G1Affine::generator();
 
-        for i in 0..MAX_GATES {
-            powers_x_g1[i] = temp_g1;
+        for powers in powers_x_g1.iter_mut() {
+            *powers = temp_g1;
             temp_g1 = (temp_g1 * toxic_waste).to_affine(); // Doing unnecessary addition at last iteration, who cares?
         }
 
@@ -57,6 +57,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
 
     /// We simplify this function as is described in the paper. The open protocol for multiple evaluation points assumes
     /// that there are only two distinct evaluation points.
+    #[allow(clippy::too_many_arguments)]
     pub fn batch_prove(
         &self,
         polynomials_a: &[Polynomial],
@@ -85,13 +86,13 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         // as we really need to enforce that.
         // todo: This is also insecure. In a real-world scenario we would need to change the label of each
         // commitment. But it is a bit of a pain to do (see here ark-plonk/somewhere).
-        transcript.append_scalar(b"eval group 1", &eval_a);
+        transcript.append_scalar(b"eval group 1", eval_a);
         for i in 0..len_a {
             transcript.append_point(b"commitments group 1", &commitments_a[i].0);
             transcript.append_scalar(b"output group 1", &output_a[i]);
         }
 
-        transcript.append_scalar(b"eval group 1", &eval_b);
+        transcript.append_scalar(b"eval group 1", eval_b);
         for j in 0..len_b {
             transcript.append_point(b"commitments group 1", &commitments_b[j].0);
             transcript.append_scalar(b"output group 1", &output_b[j]);
@@ -103,26 +104,26 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         // Now we compute h(X) and h'(X) polynomials
         let mut h_x = Polynomial::zero(MAX_GATES);
         let mut gamma_powers = Scalar::one();
-        for i in 0..len_a {
-            let mut temp_poly = polynomials_a[i].clone();
+        for poly in polynomials_a {
+            let mut temp_poly = poly.clone();
             // we subtract the polynomial evaluated at the evaluation point
-            temp_poly.0[0] -= polynomials_a[i].eval(&eval_a);
+            temp_poly.0[0] -= poly.eval(eval_a);
             // we divide by the monomial X - eval_a
-            let poly_division = temp_poly / Polynomial(vec![eval_a.clone().neg(), Scalar::one()]);
-            h_x += &poly_division * &gamma_powers;
+            let poly_division = temp_poly / Polynomial(vec![eval_a.neg(), Scalar::one()]);
+            h_x += &poly_division * gamma_powers;
             gamma_powers *= gamma;
         }
 
         let mut h_prime_x = Polynomial::zero(MAX_GATES);
 
         let mut gammaprime_powers = Scalar::one();
-        for i in 0..len_b {
-            let mut temp_poly = polynomials_b[i].clone();
+        for poly in polynomials_b {
+            let mut temp_poly = poly.clone();
             // we subtract the polynomial evaluated at the evaluation point
-            temp_poly.0[0] -= polynomials_b[i].eval(&eval_b);
+            temp_poly.0[0] -= poly.eval(eval_b);
             // we divide by the monomial X - eval_b
-            let poly_division = temp_poly / Polynomial(vec![eval_b.clone().neg(), Scalar::one()]);
-            h_prime_x += &poly_division * &gammaprime_powers;
+            let poly_division = temp_poly / Polynomial(vec![eval_b.neg(), Scalar::one()]);
+            h_prime_x += &poly_division * gammaprime_powers;
 
             // we update the power of gamma
             gammaprime_powers *= gammaprime;
@@ -133,6 +134,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
 
     /// We simplify this function as is described in the paper. The open protocol for multiple evaluation points assumes
     /// that there are only two distinct evaluation points.
+    #[allow(clippy::too_many_arguments)]
     pub fn batch_verify(
         &self,
         proof: &Kzg10BatchProof,
@@ -151,13 +153,13 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         // as we really need to enforce that.
         // todo: This is also insecure. In a real-world scenario we would need to change the label of each
         // commitment. But it is a bit of a pain to do (see here ark-plonk/somewhere).
-        transcript.append_scalar(b"eval group 1", &eval_a);
+        transcript.append_scalar(b"eval group 1", eval_a);
         for i in 0..len_a {
             transcript.append_point(b"commitments group 1", &commitments_a[i].0);
             transcript.append_scalar(b"output group 1", &output_a[i]);
         }
 
-        transcript.append_scalar(b"eval group 1", &eval_b);
+        transcript.append_scalar(b"eval group 1", eval_b);
         for j in 0..len_b {
             transcript.append_point(b"commitments group 1", &commitments_b[j].0);
             transcript.append_scalar(b"output group 1", &output_b[j]);
@@ -172,17 +174,17 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
 
         let mut gamma_powers = Scalar::one();
         for i in 0..len_a {
-            F = (F + &commitments_a[i].0 * gamma_powers
+            F = (F + commitments_a[i].0 * gamma_powers
                 - G1Affine::generator() * (gamma_powers * output_a[i]))
-            .to_affine();
+                .to_affine();
             gamma_powers *= gamma;
         }
 
         let mut gammaprime_powers = Scalar::one();
         for j in 0..len_b {
-            F = (F + &commitments_b[j].0 * (rprime * gammaprime_powers)
+            F = (F + commitments_b[j].0 * (rprime * gammaprime_powers)
                 - G1Affine::generator() * (rprime * gammaprime_powers * output_b[j]))
-            .to_affine();
+                .to_affine();
             gammaprime_powers *= gammaprime;
         }
 
@@ -200,7 +202,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
     }
 }
 
-impl<'a, 'b> Add<&'b Kzg10Commitment> for &'b Kzg10Commitment {
+impl<'a, 'b> Add<&'b Kzg10Commitment> for &'a Kzg10Commitment {
     type Output = Kzg10Commitment;
 
     fn add(self, rhs: &'b Kzg10Commitment) -> Self::Output {
@@ -208,9 +210,13 @@ impl<'a, 'b> Add<&'b Kzg10Commitment> for &'b Kzg10Commitment {
     }
 }
 
-define_add_variants!(LHS = Kzg10Commitment, RHS = Kzg10Commitment, Output = Kzg10Commitment);
+define_add_variants!(
+    LHS = Kzg10Commitment,
+    RHS = Kzg10Commitment,
+    Output = Kzg10Commitment
+);
 
-impl<'a, 'b> Mul<&'b Scalar> for &'b Kzg10Commitment {
+impl<'a, 'b> Mul<&'b Scalar> for &'a Kzg10Commitment {
     type Output = Kzg10Commitment;
 
     fn mul(self, rhs: &'b Scalar) -> Self::Output {
@@ -218,10 +224,13 @@ impl<'a, 'b> Mul<&'b Scalar> for &'b Kzg10Commitment {
     }
 }
 
-define_mul_variants!(LHS = Kzg10Commitment, RHS = Scalar, Output = Kzg10Commitment);
+define_mul_variants!(
+    LHS = Kzg10Commitment,
+    RHS = Scalar,
+    Output = Kzg10Commitment
+);
 
-
-impl<'a, 'b> Mul<&'b Kzg10Commitment> for &'b Scalar {
+impl<'a, 'b> Mul<&'b Kzg10Commitment> for &'a Scalar {
     type Output = Kzg10Commitment;
 
     fn mul(self, rhs: &'b Kzg10Commitment) -> Self::Output {
@@ -229,7 +238,11 @@ impl<'a, 'b> Mul<&'b Kzg10Commitment> for &'b Scalar {
     }
 }
 
-define_mul_variants!(LHS = Scalar, RHS = Kzg10Commitment, Output = Kzg10Commitment);
+define_mul_variants!(
+    LHS = Scalar,
+    RHS = Kzg10Commitment,
+    Output = Kzg10Commitment
+);
 
 #[cfg(test)]
 mod tests {

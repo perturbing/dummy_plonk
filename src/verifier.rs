@@ -1,17 +1,20 @@
-use std::ops::Neg;
-use blstrs::{pairing, Scalar};
-use group::Curve;
-use ff::Field;
 use crate::kzg10::Kzg10Commitment;
-use crate::plonk::{K1, K2, PreprocessedInput};
-use crate::polynomial::Polynomial;
+use crate::plonk::{PreprocessedInput, K1, K2};
 use crate::prover::PlonkProof;
 use crate::transcript::Transcript;
+use blstrs::pairing;
+use ff::Field;
+use group::Curve;
+use std::ops::Neg;
 
 pub struct PlonkVerifier;
 
 impl PlonkVerifier {
-    pub fn verify(pre_in: &PreprocessedInput, proof: &PlonkProof, transcript: &mut Transcript) -> Result<(), ()> {
+    pub fn verify(
+        pre_in: &PreprocessedInput,
+        proof: &PlonkProof,
+        transcript: &mut Transcript,
+    ) -> Result<(), ()> {
         let qm_comm = pre_in.kzg_set.commit(&pre_in.qm_x);
         let ql_comm = pre_in.kzg_set.commit(&pre_in.ql_x);
         let qr_comm = pre_in.kzg_set.commit(&pre_in.qr_x);
@@ -58,19 +61,59 @@ impl PlonkVerifier {
 
         // Now we split r into its constant and non-constant terms.
         let r0 = pre_in.constraints.lagrange_basis(0).eval(&zeta).neg() * alpha * alpha
-            + alpha.neg() * (&proof.a_eval + beta * proof.s_sig1 + gamma) * (&proof.b_eval + beta * proof.s_sig2 + gamma) * (&proof.c_eval + gamma) * proof.z_omega;
+            + alpha.neg()
+                * (proof.a_eval + beta * proof.s_sig1 + gamma)
+                * (proof.b_eval + beta * proof.s_sig2 + gamma)
+                * (proof.c_eval + gamma)
+                * proof.z_omega;
 
-        let batch_poly_commit_1 = proof.a_eval * proof.b_eval * qm_comm + proof.a_eval * ql_comm + proof.b_eval * qr_comm + proof.c_eval * qo_comm + qc_comm +
-            ((proof.a_eval + beta * zeta + gamma) * (proof.b_eval + beta * K1() * zeta + gamma) * (proof.c_eval + beta * K2() * zeta + gamma) * alpha + pre_in.constraints.lagrange_basis(0).eval(&zeta) * alpha * alpha + u) * &proof.commitment_z +
-            (proof.a_eval + beta * proof.s_sig1 + gamma).neg() * (proof.b_eval + beta * proof.s_sig2 + gamma) * alpha * beta * proof.z_omega * s_sig3 +
-            zero_poly_eval.neg() * (&proof.t_low + &proof.t_mid * zeta.pow_vartime(&[pre_in.constraints.nr_constraints as u64, 0, 0, 0]) + &proof.t_high * zeta.pow_vartime(&[2 * pre_in.constraints.nr_constraints as u64, 0, 0, 0]));
+        let batch_poly_commit_1 = proof.a_eval * proof.b_eval * qm_comm
+            + proof.a_eval * ql_comm
+            + proof.b_eval * qr_comm
+            + proof.c_eval * qo_comm
+            + qc_comm
+            + ((proof.a_eval + beta * zeta + gamma)
+                * (proof.b_eval + beta * K1() * zeta + gamma)
+                * (proof.c_eval + beta * K2() * zeta + gamma)
+                * alpha
+                + pre_in.constraints.lagrange_basis(0).eval(&zeta) * alpha * alpha
+                + u)
+                * &proof.commitment_z
+            + (proof.a_eval + beta * proof.s_sig1 + gamma).neg()
+                * (proof.b_eval + beta * proof.s_sig2 + gamma)
+                * alpha
+                * beta
+                * proof.z_omega
+                * s_sig3
+            + zero_poly_eval.neg()
+                * (&proof.t_low
+                    + &proof.t_mid
+                        * zeta.pow_vartime([pre_in.constraints.nr_constraints as u64, 0, 0, 0])
+                    + &proof.t_high
+                        * zeta.pow_vartime([
+                            2 * pre_in.constraints.nr_constraints as u64,
+                            0,
+                            0,
+                            0,
+                        ]));
 
-        let batch_poly_commit_full = batch_poly_commit_1 + v * (&proof.commitment_a + v * (&proof.commitment_b + v * (&proof.commitment_c + v * (&s_sig1 + v * (&s_sig2)))));
+        let batch_poly_commit_full = batch_poly_commit_1
+            + v * (&proof.commitment_a
+                + v * (&proof.commitment_b
+                    + v * (&proof.commitment_c + v * (&s_sig1 + v * (&s_sig2)))));
 
-        let group_encoded_batch_eval = &pre_in.kzg_set.powers_x_g1[0] * (r0.neg() + v * (&proof.a_eval + v * (&proof.b_eval + v * (&proof.c_eval + v * (&proof.s_sig1 + v * (&proof.s_sig2))))) + u * proof.z_omega);
+        let group_encoded_batch_eval = pre_in.kzg_set.powers_x_g1[0]
+            * (r0.neg()
+                + v * (proof.a_eval
+                    + v * (proof.b_eval
+                        + v * (proof.c_eval + v * (proof.s_sig1 + v * proof.s_sig2))))
+                + u * proof.z_omega);
 
         let lhs_g1 = &proof.w_omega + u * &proof.w_omega_zeta;
-        let rhs_g2 = zeta * &proof.w_omega + u * zeta * pre_in.constraints.extended_h_subgroup[0] * &proof.w_omega_zeta + batch_poly_commit_full + Kzg10Commitment(group_encoded_batch_eval.to_affine().neg());
+        let rhs_g2 = zeta * &proof.w_omega
+            + u * zeta * pre_in.constraints.extended_h_subgroup[0] * &proof.w_omega_zeta
+            + batch_poly_commit_full
+            + Kzg10Commitment(group_encoded_batch_eval.to_affine().neg());
 
         let lhs_pairing = pairing(&lhs_g1.0, &pre_in.kzg_set.powers_x_g2[1]);
         let rhs_pairing = pairing(&rhs_g2.0, &pre_in.kzg_set.powers_x_g2[0]);
@@ -88,8 +131,8 @@ mod test {
     use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
     use crate::prover::Prover;
     use crate::transcript::Transcript;
-    use blstrs::Scalar;
     use crate::verifier::PlonkVerifier;
+    use blstrs::Scalar;
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace) {
         // We are going to begin with a simple proof, showing that I know the value of
@@ -103,9 +146,9 @@ mod test {
         circuit.mult_gate(); // z * z = z^2
         circuit.add_gate(); // x^2 + y^2 = z^2
         circuit.connect_wires(&0, &4); // todo: index at zero or 1 :thinking-face:
-        // circuit.connect_wires(&8, &3);
+        circuit.connect_wires(&8, &3);
         circuit.connect_wires(&1, &5);
-        // circuit.connect_wires(&9, &7);
+        circuit.connect_wires(&9, &7);
         circuit.connect_wires(&2, &6);
         circuit.connect_wires(&10, &11);
 

@@ -17,18 +17,18 @@ impl Transcript {
     pub fn append_message(&mut self, label: &'static [u8], message: &[u8]) {
         let data_len = (message.len() as u32).to_le_bytes();
         self.0.update(label);
-        self.0.update(&data_len);
+        self.0.update(data_len);
         self.0.update(message);
     }
 
     pub fn append_point(&mut self, label: &'static [u8], message: &G1Affine) {
         self.0.update(label);
-        self.0.update(&message.to_compressed());
+        self.0.update(message.to_compressed());
     }
 
     pub fn append_scalar(&mut self, label: &'static [u8], message: &Scalar) {
         self.0.update(label);
-        self.0.update(&message.to_bytes_be());
+        self.0.update(message.to_bytes_be());
     }
 
     pub fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
@@ -43,8 +43,8 @@ impl Transcript {
 mod tests {
     use super::*;
     use crate::transcript::Transcript;
-    use group::prime::PrimeCurveAffine;
     use ff::Field;
+    use group::prime::PrimeCurveAffine;
     use rand_chacha::ChaCha20Rng;
     use rand_core::SeedableRng;
 

@@ -198,10 +198,10 @@ impl PolynomialEvaluationPoints {
                     continue;
                 }
                 lb *= &Polynomial(vec![self.0[j].0.neg(), Scalar::one()])
-                    * &(self.0[i].0 - self.0[j].0).invert().unwrap();
+                    * (self.0[i].0 - self.0[j].0).invert().unwrap();
             }
 
-            polynomial += &lb * &self.0[i].1;
+            polynomial += &lb * self.0[i].1;
         }
 
         polynomial

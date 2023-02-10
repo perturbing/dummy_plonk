@@ -31,7 +31,7 @@
 // to keep the count in our examples.
 #![allow(non_snake_case)]
 use crate::kzg10::Kzg10;
-use crate::polynomial::{Polynomial, PolynomialEvaluationPoints};
+use crate::polynomial::Polynomial;
 use blstrs::Scalar;
 use ff::{Field, PrimeField};
 use std::collections::HashMap;
@@ -146,7 +146,7 @@ impl PlonkCircuit {
             }
 
             lb *= &Polynomial(vec![self.extended_h_subgroup[j].neg(), Scalar::one()])
-                * &(self.extended_h_subgroup[index] - self.extended_h_subgroup[j])
+                * (self.extended_h_subgroup[index] - self.extended_h_subgroup[j])
                     .invert()
                     .unwrap();
         }
@@ -170,22 +170,25 @@ impl PlonkCircuit {
         // n being the number of constraints. We compute this root of unity out of the 2^32nd
         // root of unity, g, which is provided as a constant in the underlying library. We do so
         // by calculating omega = g^{2^32/ n}.
-        let omega =
-            Scalar::root_of_unity().pow_vartime(&[(1u64 << 32) / self.nr_constraints as u64, 0, 0, 0]);
+        let omega = Scalar::root_of_unity().pow_vartime([
+            (1u64 << 32) / self.nr_constraints as u64,
+            0,
+            0,
+            0,
+        ]);
 
         assert_eq!(
-            omega.pow_vartime(&[self.nr_constraints as u64, 0, 0, 0]),
+            omega.pow_vartime([self.nr_constraints as u64, 0, 0, 0]),
             Scalar::one()
         );
 
         self.extended_h_subgroup = vec![Scalar::zero(); self.nr_constraints * 3];
-        self.extended_h_subgroup[0] = omega.clone();
+        self.extended_h_subgroup[0] = omega;
         self.extended_h_subgroup[self.nr_constraints] = K1() * omega;
         self.extended_h_subgroup[self.nr_constraints * 2] = K2() * omega;
 
         for index in 1..self.nr_constraints {
-            self.extended_h_subgroup[index] =
-                self.extended_h_subgroup[index - 1] * omega;
+            self.extended_h_subgroup[index] = self.extended_h_subgroup[index - 1] * omega;
             self.extended_h_subgroup[index + self.nr_constraints] =
                 self.extended_h_subgroup[index] * K1();
             self.extended_h_subgroup[index + self.nr_constraints * 2] =
@@ -207,7 +210,6 @@ impl PlonkCircuit {
         let mut qo_x = Polynomial::zero(self.nr_constraints);
         let mut qm_x = Polynomial::zero(self.nr_constraints);
 
-
         for i in 0..self.nr_constraints {
             let lp = self.lagrange_basis(i);
             qs1_x += &lp * sigma_star.get(&i).unwrap();
@@ -225,7 +227,9 @@ impl PlonkCircuit {
         blinder_vec[0] = Scalar::one().neg();
         blinder_vec[self.nr_constraints] = Scalar::one();
         let blinder_polynomial = Polynomial(blinder_vec);
-        assert!(self.extended_h_subgroup[..self.nr_constraints].iter().all(|val| blinder_polynomial.eval(&val) == Scalar::zero()));
+        assert!(self.extended_h_subgroup[..self.nr_constraints]
+            .iter()
+            .all(|val| blinder_polynomial.eval(val) == Scalar::zero()));
 
         PreprocessedInput {
             kzg_set: Kzg10::setup(),
