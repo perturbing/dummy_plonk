@@ -145,36 +145,53 @@ mod test {
         circuit.mult_gate(); // y * y = y^2
         circuit.mult_gate(); // z * z = z^2
         circuit.add_gate(); // x^2 + y^2 = z^2
-        circuit.connect_wires(&0, &4); // todo: index at zero or 1 :thinking-face:
-        circuit.connect_wires(&8, &3);
-        circuit.connect_wires(&1, &5);
-        circuit.connect_wires(&9, &7);
-        circuit.connect_wires(&2, &6);
-        circuit.connect_wires(&10, &11);
+        circuit.mult_gate(); // z * y = v
+        circuit.add_gate(); // v + z^2 = res
 
-        // as a computation trace, we'll create the proof for the values (3,4,5)
+        // Circuit is finished, so we set it up
+        let setup = circuit.setup();
+
+        // As a computation trace, we'll create the proof for the values (3,4,5)
         let computation_trace = ComputationTrace {
             a: vec![
                 Scalar::from(3),
                 Scalar::from(4),
                 Scalar::from(5),
                 Scalar::from(9),
+                Scalar::from(5),
+                Scalar::from(20),
             ],
             b: vec![
                 Scalar::from(3),
                 Scalar::from(4),
                 Scalar::from(5),
                 Scalar::from(16),
+                Scalar::from(4),
+                Scalar::from(25),
             ],
             c: vec![
                 Scalar::from(9),
                 Scalar::from(16),
                 Scalar::from(25),
                 Scalar::from(25),
+                Scalar::from(20),
+                Scalar::from(45),
             ],
-        };
+        }.pad_next_power_two();
 
-        (circuit.setup(), computation_trace)
+        // We need to connect the wires with the padded trace:
+        circuit.connect_wires(&0, &8);
+        circuit.connect_wires(&16, &3);
+        circuit.connect_wires(&1, &9);
+        circuit.connect_wires(&17, &11);
+        circuit.connect_wires(&2, &10);
+        circuit.connect_wires(&16, &17);
+        circuit.connect_wires(&2, &4);
+        circuit.connect_wires(&1, &12);
+        circuit.connect_wires(&18, &5);
+        circuit.connect_wires(&16, &13);
+
+        (setup, computation_trace)
     }
     #[test]
     fn test_verifier() {
@@ -182,6 +199,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"testing the prover");
 
         let (pre_in, trace) = create_dummy_circuit_and_prover_key();
+
         let proof = Prover::prove(&pre_in, &trace, &mut prover_transcript);
 
         assert!(PlonkVerifier::verify(&pre_in, &proof, &mut verifier_transcript).is_ok());

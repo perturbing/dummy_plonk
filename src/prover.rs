@@ -47,6 +47,8 @@ impl Prover {
         //     Scalar::from(7),
         // );
 
+        let prover_key = prover_key.pad_next_power_two();
+
         // First we check that indeed the permutation is correct:
         let mut extended_witness = Vec::with_capacity(prover_key.a.len() * 3);
         extended_witness.extend_from_slice(&prover_key.a);
@@ -54,11 +56,9 @@ impl Prover {
         extended_witness.extend_from_slice(&prover_key.c);
 
         // we check that the permutation validates
-        assert!(pre_in
-            .constraints
-            .permutations
-            .iter()
-            .all(|(&key, &value)| extended_witness[key] == extended_witness[value]));
+        for (&key, &value) in pre_in.constraints.permutations.iter() {
+            assert_eq!(extended_witness[key], extended_witness[value], "Failed in key {key} and value {value}.");
+        }
 
         // Now we compute the wire scalar:
         let mut a_poly = Polynomial::zero(pre_in.constraints.nr_constraints); //Polynomial(vec![b2, b1]) * &pre_in.blinder_polynomial;
@@ -210,13 +210,27 @@ impl Prover {
         // Now we need to split the polynomial into three polynomials of degree at most n + 5.
         let quotient_low =
             Polynomial(quotient_poly.0[..pre_in.constraints.nr_constraints].to_vec());
-        let quotient_mid = Polynomial(
-            quotient_poly.0
-                [pre_in.constraints.nr_constraints..2 * pre_in.constraints.nr_constraints]
-                .to_vec(),
-        );
-        let quotient_high =
-            Polynomial(quotient_poly.0[2 * pre_in.constraints.nr_constraints..].to_vec());
+
+        let (quotient_mid, quotient_high) = match quotient_poly.0.len() / pre_in.constraints.nr_constraints {
+            0 => (Polynomial::zero(pre_in.constraints.nr_constraints), Polynomial::zero(pre_in.constraints.nr_constraints)),
+            1 => (
+                Polynomial(
+                    quotient_poly.0
+                        [pre_in.constraints.nr_constraints..]
+                        .to_vec(),
+                ),
+                Polynomial::zero(pre_in.constraints.nr_constraints)
+                ),
+            2 => (
+                Polynomial(
+                    quotient_poly.0
+                        [pre_in.constraints.nr_constraints..2 * pre_in.constraints.nr_constraints]
+                        .to_vec(),
+                ),
+                Polynomial(quotient_poly.0[2 * pre_in.constraints.nr_constraints..].to_vec())
+                ),
+            _ => {panic!("Unexpected quotient_poly length")}
+        };
 
         let quotient_low_comm = pre_in.kzg_set.commit(&quotient_low);
         let quotient_mid_comm = pre_in.kzg_set.commit(&quotient_mid);
@@ -359,6 +373,8 @@ mod test {
         circuit.connect_wires(&2, &6);
         circuit.connect_wires(&10, &11);
 
+        let setup = circuit.setup();
+
         // as a computation trace, we'll create the proof for the values (3,4,5)
         let computation_trace = ComputationTrace {
             a: vec![
@@ -379,17 +395,9 @@ mod test {
                 Scalar::from(25),
                 Scalar::from(25),
             ],
-        };
-        // // Helpful for debugging
-        // let size = circuit.constraints.qm.len();
-        // let zero_vec = vec![Scalar::zero(); size];
-        // circuit.constraints.qm = zero_vec.clone();
-        // circuit.constraints.ql = zero_vec.clone();
-        // circuit.constraints.qr = zero_vec.clone();
-        // circuit.constraints.qo = zero_vec.clone();
-        // circuit.constraints.qc = zero_vec.clone();
+        }.pad_next_power_two();
 
-        (circuit.setup(), computation_trace)
+        (setup, computation_trace)
     }
     #[test]
     fn test_prover() {

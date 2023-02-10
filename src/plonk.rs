@@ -50,6 +50,23 @@ pub struct ComputationTrace {
     pub(crate) c: Vec<Scalar>,
 }
 
+impl ComputationTrace {
+    pub(crate) fn pad_next_power_two(&self) -> Self {
+        let new_size = self.a.len().next_power_of_two();
+        let mut result = ComputationTrace {
+            a: vec![Scalar::zero(); new_size],
+            b: vec![Scalar::zero(); new_size],
+            c: vec![Scalar::zero(); new_size]
+        };
+
+        result.a[..self.a.len()].copy_from_slice(&self.a);
+        result.b[..self.b.len()].copy_from_slice(&self.b);
+        result.c[..self.c.len()].copy_from_slice(&self.c);
+
+        result
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Constraints {
     pub qm: Vec<Scalar>,
