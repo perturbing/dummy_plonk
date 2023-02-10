@@ -286,17 +286,17 @@ mod tests {
             &mut transcript,
         );
 
-        // assert!(kzg10
-        //     .batch_verify(
-        //         &proof,
-        //         &[commitment1],
-        //         &[commitment2],
-        //         &eval_point1,
-        //         &eval_point2,
-        //         &[result1],
-        //         &[result2],
-        //         &mut transcript_verifier
-        //     )
-        //     .is_ok())
+        assert!(kzg10
+            .batch_verify(
+                &proof,
+                &[commitment1],
+                &[commitment2],
+                &eval_point1,
+                &eval_point2,
+                &[result1],
+                &[result2],
+                &mut transcript_verifier
+            )
+            .is_ok())
     }
 }

@@ -10,10 +10,10 @@ use ff::Field;
 pub struct Prover;
 
 pub struct PlonkProof {
-    pub a: Kzg10Commitment,
-    pub b: Kzg10Commitment,
-    pub c: Kzg10Commitment,
-    pub z: Kzg10Commitment,
+    pub commitment_a: Kzg10Commitment,
+    pub commitment_b: Kzg10Commitment,
+    pub commitment_c: Kzg10Commitment,
+    pub commitment_z: Kzg10Commitment,
     pub t_low: Kzg10Commitment,
     pub t_mid: Kzg10Commitment,
     pub t_high: Kzg10Commitment,
@@ -53,6 +53,7 @@ impl Prover {
         extended_witness.extend_from_slice(&prover_key.b);
         extended_witness.extend_from_slice(&prover_key.c);
 
+        // we check that the permutation validates
         assert!(pre_in.constraints.permutations.iter().all(|(&key, &value)| extended_witness[key] == extended_witness[value]));
 
         // Now we compute the wire scalar:
@@ -92,6 +93,18 @@ impl Prover {
                 factor *= numerator * denominator.invert().unwrap();
             }
             permutation_polynomial += pre_in.constraints.lagrange_basis(i) * factor;
+        }
+
+        // Simple check that we didn't mess up somewhere stupid
+        for i in 1..pre_in.constraints.nr_constraints {
+            let mut factor = Scalar::one();
+            for j in 0..i {
+                let numerator = (prover_key.a[j] + beta * pre_in.constraints.extended_h_subgroup[j] + gamma) * (prover_key.b[j] + beta * K1() * pre_in.constraints.extended_h_subgroup[j] + gamma) * (prover_key.c[j] + beta * K2() * pre_in.constraints.extended_h_subgroup[j] + gamma);
+                let denominator = (prover_key.a[j] + pre_in.sigma_star.get(&j).unwrap() * beta + gamma) * (prover_key.b[j] + pre_in.sigma_star.get(&(j + pre_in.constraints.nr_constraints)).unwrap() * beta + gamma) * (prover_key.c[j] + pre_in.sigma_star.get(&(j + 2 * pre_in.constraints.nr_constraints)).unwrap() * beta + gamma);
+                factor *= numerator * denominator.invert().unwrap();
+            }
+
+            assert_eq!(permutation_polynomial.eval(&pre_in.constraints.extended_h_subgroup[i]), factor);
         }
 
         let commitment_z = pre_in.kzg_set.commit(&permutation_polynomial);
@@ -173,8 +186,8 @@ impl Prover {
             &permutation_polynomial * (a_eval + beta * zeta + gamma) * (b_eval + beta * zeta * K1() + gamma) * (c_eval + beta * zeta * K2() + gamma) -
                 (&pre_in.qs3_x * beta + gamma + c_eval) * (a_eval + beta * s_sig1 + gamma) * (b_eval + beta * s_sig2 + gamma) * z_omega
             ) * alpha ;
-        linearisation_poly += (&linearisation_poly + Scalar::one().neg()) * pre_in.constraints.lagrange_basis(0).eval(&zeta) * alpha * alpha;
-        linearisation_poly = &linearisation_poly - quotient_mid * pre_in.blinder_polynomial.eval(&zeta) * (quotient_low + zeta.pow_vartime(&[pre_in.constraints.nr_constraints as u64, 0, 0, 0]) + quotient_high * zeta.pow_vartime(&[pre_in.constraints.nr_constraints as u64, 0, 0, 0]));
+        linearisation_poly += (&permutation_polynomial + Scalar::one().neg()) * pre_in.constraints.lagrange_basis(0).eval(&zeta) * alpha * alpha;
+        linearisation_poly = &linearisation_poly - (quotient_low + quotient_mid * zeta.pow_vartime(&[pre_in.constraints.nr_constraints as u64, 0, 0, 0]) + quotient_high * zeta.pow_vartime(&[2 * pre_in.constraints.nr_constraints as u64, 0, 0, 0])) * pre_in.blinder_polynomial.eval(&zeta);
 
         // Now we compute the opening proof polynomial:
         let mut w_omega = linearisation_poly.clone();
@@ -184,9 +197,15 @@ impl Prover {
         w_omega += (&pre_in.qs1_x + s_sig1.neg()) * v * v * v * v;
         w_omega += (&pre_in.qs2_x + s_sig2.neg()) * v * v * v * v * v;
 
+        assert_eq!(w_omega.eval(&zeta), Scalar::zero());
+
         w_omega = w_omega / Polynomial(vec![zeta.neg(), Scalar::one()]);
 
-        let w_omega_zeta = (permutation_polynomial + z_omega.neg()) / Polynomial(vec![(zeta * pre_in.constraints.extended_h_subgroup[0]).neg(), Scalar::one()]);
+        let mut w_omega_zeta = (permutation_polynomial + z_omega.neg());
+
+        assert_eq!(w_omega_zeta.eval(&(zeta * pre_in.constraints.extended_h_subgroup[0])), Scalar::zero());
+
+        w_omega_zeta = w_omega_zeta / Polynomial(vec![(zeta * pre_in.constraints.extended_h_subgroup[0]).neg(), Scalar::one()]);
 
         let w_omega_comm = pre_in.kzg_set.commit(&w_omega);
         let w_omega_zeta_comm = pre_in.kzg_set.commit(&w_omega_zeta);
@@ -195,10 +214,10 @@ impl Prover {
         transcript.append_point(b"w_omega_zeta comm", &w_omega_zeta_comm.0);
 
         PlonkProof {
-            a: commitment_a,
-            b: commitment_b,
-            c: commitment_c,
-            z: commitment_z,
+            commitment_a,
+            commitment_b,
+            commitment_c,
+            commitment_z,
             t_low: quotient_low_comm,
             t_mid: quotient_mid_comm,
             t_high: quotient_high_comm,
@@ -232,16 +251,16 @@ mod test {
         // a pythagorean triplet. i.e., three values such that x^2 + y^2 = z^2;
         let mut circuit = PlonkCircuit::init();
 
-        //                     | a | b | c |
-        //                      ----------
+                             //| a | b | c |
+                             // ----------
         circuit.mult_gate(); // x * x = x^2
         circuit.mult_gate(); // y * y = y^2
         circuit.mult_gate(); // z * z = z^2
-        circuit.add_gate(); // x^2 + y^2 = z^2
-        circuit.connect_wires(&0, &4); // todo: index at zero or 1 :thinking-face:
-        // circuit.connect_wires(&8, &3);
+        circuit.add_gate();  // x^2 + y^2 = z^2
+        circuit.connect_wires(&0, &4);
+        circuit.connect_wires(&3, &8);
         circuit.connect_wires(&1, &5);
-        // circuit.connect_wires(&9, &7);
+        circuit.connect_wires(&7, &9);
         circuit.connect_wires(&2, &6);
         circuit.connect_wires(&10, &11);
 

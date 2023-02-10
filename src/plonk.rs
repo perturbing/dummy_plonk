@@ -140,7 +140,7 @@ impl PlonkCircuit {
 
     pub fn lagrange_basis(&self, index: usize) -> Polynomial {
         let mut lb = Polynomial(vec![Scalar::from(1)]);
-        for j in 0..self.extended_h_subgroup.len() {
+        for j in 0..self.nr_constraints {
             if index == j {
                 continue;
             }
@@ -156,29 +156,7 @@ impl PlonkCircuit {
     pub fn compute_sigma_star(&self) -> HashMap<usize, Scalar> {
         self.permutations
             .iter()
-            .map(|(index, value)| match index / self.nr_constraints {
-                0 => {
-                    return (
-                        *index,
-                        self.extended_h_subgroup[value % self.nr_constraints]
-                    )
-                }
-                1 => {
-                    return (
-                        *index,
-                        K1() * self.extended_h_subgroup[value % self.nr_constraints]
-                    )
-                }
-                2 => {
-                    return (
-                        *index,
-                        K2() * self.extended_h_subgroup[value % self.nr_constraints]
-                    )
-                }
-                _ => {
-                    panic!("well, this was unexpected")
-                }
-            })
+            .map(|(index, value)| (*index, self.extended_h_subgroup[*value]))
             .collect::<HashMap<usize, Scalar>>()
     }
 
@@ -187,10 +165,11 @@ impl PlonkCircuit {
         while (self.nr_constraints & (self.nr_constraints - 1)) != 0 {
             self.add_gate();
         }
-        // For simplicity, we begin computing our extended subgroup H'. We need a nth root of unity with
+
+        // For simplicity, we begin computing our extended subgroup H'. We need an nth root of unity with
         // n being the number of constraints. We compute this root of unity out of the 2^32nd
         // root of unity, g, which is provided as a constant in the underlying library. We do so
-        // by calculating omega = g^{2^32 - n}.
+        // by calculating omega = g^{2^32/ n}.
         let omega =
             Scalar::root_of_unity().pow_vartime(&[(1u64 << 32) / self.nr_constraints as u64, 0, 0, 0]);
 
@@ -216,69 +195,31 @@ impl PlonkCircuit {
         // Next, we define the \sigma*
         let sigma_star = self.compute_sigma_star();
 
-        // Now we create the permutation polynomials qs1, qs2 and qs3.
+        // Now we create the permutation polynomials qs1, qs2 and qs3, and the
+        // selector polynomials ql_x, qr_x, qc_x, qo_x and qm_x.
         let mut qs1_x = Polynomial::zero(self.nr_constraints);
         let mut qs2_x = Polynomial::zero(self.nr_constraints);
         let mut qs3_x = Polynomial::zero(self.nr_constraints);
+
+        let mut ql_x = Polynomial::zero(self.nr_constraints);
+        let mut qr_x = Polynomial::zero(self.nr_constraints);
+        let mut qc_x = Polynomial::zero(self.nr_constraints);
+        let mut qo_x = Polynomial::zero(self.nr_constraints);
+        let mut qm_x = Polynomial::zero(self.nr_constraints);
+
 
         for i in 0..self.nr_constraints {
             let lp = self.lagrange_basis(i);
             qs1_x += &lp * sigma_star.get(&i).unwrap();
             qs2_x += &lp * sigma_star.get(&(self.nr_constraints + i)).unwrap();
             qs3_x += &lp * sigma_star.get(&(self.nr_constraints * 2 + i)).unwrap();
+
+            ql_x += &lp * self.constraints.ql[i];
+            qr_x += &lp * self.constraints.qr[i];
+            qc_x += &lp * self.constraints.qc[i];
+            qo_x += &lp * self.constraints.qo[i];
+            qm_x += &lp * self.constraints.qm[i];
         }
-
-        // Next we compute the selector polynomials. This is performed by interpolating
-        // the pairs (g^i, q_i), for q_i being elements of the vectors, ql, qr, ..., qc.
-        let ql_x = PolynomialEvaluationPoints(
-            self.constraints
-                .ql
-                .iter()
-                .zip(self.extended_h_subgroup[..self.nr_constraints].iter())
-                .map(|(element, power_w)| (power_w.clone(), element.clone()))
-                .collect(),
-        )
-        .interpolate();
-
-        let qr_x = PolynomialEvaluationPoints(
-            self.constraints
-                .qr
-                .iter()
-                .zip(self.extended_h_subgroup[..self.nr_constraints].iter())
-                .map(|(element, power_w)| (power_w.clone(), element.clone()))
-                .collect(),
-        )
-        .interpolate();
-
-        let qc_x = PolynomialEvaluationPoints(
-            self.constraints
-                .qc
-                .iter()
-                .zip(self.extended_h_subgroup[..self.nr_constraints].iter())
-                .map(|(element, power_w)| (power_w.clone(), element.clone()))
-                .collect(),
-        )
-        .interpolate();
-
-        let qm_x = PolynomialEvaluationPoints(
-            self.constraints
-                .qm
-                .iter()
-                .zip(self.extended_h_subgroup[..self.nr_constraints].iter())
-                .map(|(element, power_w)| (power_w.clone(), element.clone()))
-                .collect(),
-        )
-        .interpolate();
-
-        let qo_x = PolynomialEvaluationPoints(
-            self.constraints
-                .qo
-                .iter()
-                .zip(self.extended_h_subgroup[..self.nr_constraints].iter())
-                .map(|(element, power_w)| (power_w.clone(), element.clone()))
-                .collect(),
-        )
-        .interpolate();
 
         let mut blinder_vec = vec![Scalar::zero(); self.nr_constraints + 1];
         blinder_vec[0] = Scalar::one().neg();
