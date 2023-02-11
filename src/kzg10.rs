@@ -84,7 +84,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         // First we use the transcript to generate two scalars.
         // The code here will panic if not all vectors are the same, but that's fine here,
         // as we really need to enforce that.
-        // todo: This is also insecure. In a real-world scenario we would need to change the label of each
+        // NOTE: This is also insecure. In a real-world scenario we would need to change the label of each
         // commitment. But it is a bit of a pain to do (see here ark-plonk/somewhere).
         transcript.append_scalar(b"eval group 1", eval_a);
         for i in 0..len_a {
@@ -151,7 +151,7 @@ impl<const MAX_GATES: usize> Kzg10<MAX_GATES> {
         // First we use the transcript to generate two scalars.
         // The code here will panic if not all vectors are the same, but that's fine here,
         // as we really need to enforce that.
-        // todo: This is also insecure. In a real-world scenario we would need to change the label of each
+        // NOTE: This is also insecure. In a real-world scenario we would need to change the label of each
         // commitment. But it is a bit of a pain to do (see here ark-plonk/somewhere).
         transcript.append_scalar(b"eval group 1", eval_a);
         for i in 0..len_a {

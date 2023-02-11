@@ -56,7 +56,7 @@ impl ComputationTrace {
         let mut result = ComputationTrace {
             a: vec![Scalar::zero(); new_size],
             b: vec![Scalar::zero(); new_size],
-            c: vec![Scalar::zero(); new_size]
+            c: vec![Scalar::zero(); new_size],
         };
 
         result.a[..self.a.len()].copy_from_slice(&self.a);
