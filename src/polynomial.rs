@@ -1,7 +1,7 @@
 use crate::*;
 use blstrs::Scalar;
 use ff::Field;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub};
 
 // Polynomial written as p(x) = a0 + x * a1 + .. + x^{MAX_DEGREE} * a_{MAX_DEGREE}, where we always pad with zeroes.
@@ -73,14 +73,18 @@ impl<'a, 'b> Sub<&'b Polynomial> for &'a Polynomial {
     type Output = Polynomial;
 
     fn sub(self, rhs: &'b Polynomial) -> Self::Output {
-        let min_degree = min(self.0.len(), rhs.0.len());
+        let max_degree = max(self.0.len(), rhs.0.len());
         let mut result = if self.0.len() > rhs.0.len() {
             self.clone()
         } else {
-            rhs.clone()
+            let diff_deg = rhs.0.len() - self.0.len();
+            let mut coeffs = self.0.clone();
+            coeffs.extend_from_slice(&vec![Scalar::zero(); diff_deg]);
+            Polynomial(coeffs)
         };
-        for index in 0..min_degree {
-            result.0[index] = self.0[index] - rhs.0[index]
+        for index in 0..max_degree {
+            result.0[index] = self.0.get(index).unwrap_or(&Scalar::zero())
+                - rhs.0.get(index).unwrap_or(&Scalar::zero())
         }
 
         result
@@ -150,8 +154,8 @@ impl<'b> MulAssign<&'b Polynomial> for Polynomial {
 define_mul_assign_variants!(LHS = Polynomial, RHS = Polynomial);
 
 // The following division algorithm is not generic. It's a simplification given that we
-// know we are only going to use this with a monomial of the form X^n - 1 as a denominator.
-// todo: for now
+// know we are only going to use this with a monomial of the form X^n - 1 as a denominator
+// which is a divisor.
 impl Div<Polynomial> for Polynomial {
     type Output = Polynomial;
 
@@ -311,5 +315,42 @@ mod tests {
         let eval_poly = PolynomialEvaluationPoints(eval_points);
 
         assert_eq!(poly1.0, eval_poly.interpolate().0);
+    }
+
+    #[test]
+    fn test_subtraction() {
+        let poly1 = Polynomial(vec![
+            Scalar::from(9),
+            Scalar::from(9),
+            Scalar::from(55).neg(),
+            Scalar::from(2),
+            Scalar::from(7),
+        ]);
+        let poly2 = Polynomial(vec![Scalar::from(3), Scalar::from(1)]);
+
+        let poly3 = Polynomial(vec![
+            Scalar::from(3),
+            Scalar::from(2),
+            Scalar::from(19).neg(),
+            Scalar::from(7),
+        ]);
+
+        let poly1m3 = Polynomial(vec![
+            Scalar::from(6),
+            Scalar::from(7),
+            Scalar::from(55).neg() + Scalar::from(19),
+            Scalar::from(2) - Scalar::from(7),
+            Scalar::from(7),
+        ]);
+
+        let poly2m3 = Polynomial(vec![
+            Scalar::from(0),
+            Scalar::from(1).neg(),
+            Scalar::from(19),
+            Scalar::from(7).neg(),
+        ]);
+
+        assert_eq!(poly1 - &poly3, poly1m3);
+        assert_eq!(poly2 - poly3, poly2m3);
     }
 }
