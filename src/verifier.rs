@@ -177,7 +177,8 @@ mod test {
                 Scalar::from(20),
                 Scalar::from(45),
             ],
-        }.pad_next_power_two();
+        }
+        .pad_next_power_two();
 
         // We need to connect the wires with the padded trace:
         circuit.connect_wires(&0, &8);
