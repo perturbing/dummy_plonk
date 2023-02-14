@@ -2,7 +2,7 @@ use crate::kzg10::Kzg10Commitment;
 use crate::plonk::{PreprocessedInput, K1, K2};
 use crate::prover::PlonkProof;
 use crate::transcript::Transcript;
-use blstrs::pairing;
+use blstrs::{pairing, Scalar};
 use ff::Field;
 use group::Curve;
 use std::ops::Neg;
@@ -11,6 +11,7 @@ pub struct PlonkVerifier;
 
 impl PlonkVerifier {
     pub fn verify(
+        pub_in: &[Scalar],
         pre_in: &PreprocessedInput,
         proof: &PlonkProof,
         transcript: &mut Transcript,
@@ -57,10 +58,16 @@ impl PlonkVerifier {
 
         let zero_poly_eval = pre_in.blinder_polynomial.eval(&zeta);
 
-        // We skip the public input polynomial, as we currently don't do anything with it.
+        // We compute the public polynomial
+        let pi_eval: Scalar = pub_in
+            .iter()
+            .enumerate()
+            .map(|(index, s)| s * pre_in.constraints.lagrange_basis(index).eval(&zeta))
+            .sum();
 
         // Now we split r into its constant and non-constant terms.
-        let r0 = pre_in.constraints.lagrange_basis(0).eval(&zeta).neg() * alpha * alpha
+        let r0 = pi_eval.neg()
+            + pre_in.constraints.lagrange_basis(0).eval(&zeta).neg() * alpha * alpha
             + alpha.neg()
                 * (proof.a_eval + beta * proof.s_sig1 + gamma)
                 * (proof.b_eval + beta * proof.s_sig2 + gamma)
@@ -134,10 +141,12 @@ mod test {
     use crate::verifier::PlonkVerifier;
     use blstrs::Scalar;
 
-    fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace) {
+    fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace, Vec<Scalar>) {
         // We are going to begin with a simple proof, showing that I know the value of
         // a pythagorean triplet. i.e., three values such that x^2 + y^2 = z^2;
         let mut circuit = PlonkCircuit::init();
+
+        circuit.prepare_pi(); // pub constraint
 
         //                     | a | b | c |
         //                      ----------
@@ -148,12 +157,29 @@ mod test {
         circuit.mult_gate(); // z * y = v
         circuit.add_gate(); // v + z^2 = res
 
-        // Circuit is finished, so we set it up
+        // Circuit is finished, so we set it up before connecting the wires (this handles the padding)
         let setup = circuit.setup();
+
+        // We need to connect the wires with the padded trace:
+        circuit.connect_wires(&2, &1); // Connecting PI with x^2
+        circuit.connect_wires(&1, &9);
+        circuit.connect_wires(&17, &4);
+        circuit.connect_wires(&2, &10);
+        circuit.connect_wires(&18, &12);
+        circuit.connect_wires(&3, &11);
+        circuit.connect_wires(&17, &18);
+        circuit.connect_wires(&3, &5);
+        circuit.connect_wires(&2, &13);
+        circuit.connect_wires(&19, &6);
+        circuit.connect_wires(&17, &14);
+
+        // We put as a public input that the first square (x^2) needs to be 9
+        let pub_in = vec![Scalar::from(9)];
 
         // As a computation trace, we'll create the proof for the values (3,4,5)
         let computation_trace = ComputationTrace {
             a: vec![
+                Scalar::from(9),
                 Scalar::from(3),
                 Scalar::from(4),
                 Scalar::from(5),
@@ -162,6 +188,7 @@ mod test {
                 Scalar::from(20),
             ],
             b: vec![
+                Scalar::from(0),
                 Scalar::from(3),
                 Scalar::from(4),
                 Scalar::from(5),
@@ -170,6 +197,7 @@ mod test {
                 Scalar::from(25),
             ],
             c: vec![
+                Scalar::from(0),
                 Scalar::from(9),
                 Scalar::from(16),
                 Scalar::from(25),
@@ -180,29 +208,17 @@ mod test {
         }
         .pad_next_power_two();
 
-        // We need to connect the wires with the padded trace:
-        circuit.connect_wires(&0, &8);
-        circuit.connect_wires(&16, &3);
-        circuit.connect_wires(&1, &9);
-        circuit.connect_wires(&17, &11);
-        circuit.connect_wires(&2, &10);
-        circuit.connect_wires(&16, &17);
-        circuit.connect_wires(&2, &4);
-        circuit.connect_wires(&1, &12);
-        circuit.connect_wires(&18, &5);
-        circuit.connect_wires(&16, &13);
-
-        (setup, computation_trace)
+        (setup, computation_trace, pub_in)
     }
     #[test]
     fn test_verifier() {
         let mut prover_transcript = Transcript::new(b"testing the prover");
         let mut verifier_transcript = Transcript::new(b"testing the prover");
 
-        let (pre_in, trace) = create_dummy_circuit_and_prover_key();
+        let (pre_in, trace, pub_in) = create_dummy_circuit_and_prover_key();
 
-        let proof = Prover::prove(&pre_in, &trace, &mut prover_transcript);
+        let proof = Prover::prove(&pub_in, &pre_in, &trace, &mut prover_transcript);
 
-        assert!(PlonkVerifier::verify(&pre_in, &proof, &mut verifier_transcript).is_ok());
+        assert!(PlonkVerifier::verify(&pub_in, &pre_in, &proof, &mut verifier_transcript).is_ok());
     }
 }

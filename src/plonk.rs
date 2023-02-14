@@ -148,6 +148,24 @@ impl PlonkCircuit {
         self.nr_constraints += 1;
     }
 
+    pub fn prepare_pi(&mut self) {
+        self.constraints.ql.push(Scalar::one());
+        self.constraints.qr.push(Scalar::zero());
+        self.constraints.qo.push(Scalar::zero());
+        self.constraints.qm.push(Scalar::zero());
+        self.constraints.qc.push(Scalar::zero());
+
+        // we extend the permutation with the identity permutation
+        self.permutations.insert(self.nr_wires, self.nr_wires);
+        self.permutations
+            .insert(self.nr_wires + 1, self.nr_wires + 1);
+        self.permutations
+            .insert(self.nr_wires + 2, self.nr_wires + 2);
+
+        self.nr_wires += 3;
+        self.nr_constraints += 1;
+    }
+
     // This should always be called after creating the gates.
     pub fn connect_wires(&mut self, in_wire: &usize, out_wire: &usize) {
         assert!(*in_wire < self.nr_wires && *out_wire < self.nr_wires, "The circuit does not have enough wires for these two. Max {0}, got {in_wire} and {out_wire}", self.nr_wires);

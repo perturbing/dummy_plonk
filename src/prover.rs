@@ -29,10 +29,18 @@ pub struct PlonkProof {
 
 impl Prover {
     pub fn prove(
+        public_in: &[Scalar],
         pre_in: &PreprocessedInput,
         prover_key: &ComputationTrace,
         transcript: &mut Transcript,
     ) -> PlonkProof {
+        // We begin by computing the public polynomial
+        let mut pi = Polynomial::zero(public_in.len());
+        for (i, input) in public_in.iter().enumerate() {
+            let lp = pre_in.constraints.lagrange_basis(i);
+            pi += lp * input.neg();
+        }
+
         // We first compute the random scalars, that we don't compute randomly for debugging.
         let (b1, b2, b3, b4, b5, b6, b7, b8, b9) = (
             Scalar::random(&mut OsRng),
@@ -133,11 +141,12 @@ impl Prover {
         let alpha = transcript.challenge_scalar(b"alpha");
 
         // We now compute the quotient polynomial. For simplicity of the example we are not using public
-        // inputs. todo: If we want to use PIs, change this.
+        // inputs.
         let first = &a_poly * &b_poly * &pre_in.qm_x
             + &a_poly * &pre_in.ql_x
             + &b_poly * &pre_in.qr_x
             + &c_poly * &pre_in.qo_x
+            + &pi
             + &pre_in.qc_x;
         assert!(check_subrgoup_zero(
             &pre_in.constraints.extended_h_subgroup[..pre_in.constraints.nr_constraints],
@@ -251,15 +260,16 @@ impl Prover {
             + &pre_in.ql_x * a_eval
             + &pre_in.qr_x * b_eval
             + &pre_in.qo_x * c_eval
+            + pi.eval(&zeta)
             + &pre_in.qc_x;
         linearisation_poly += (&permutation_polynomial
             * (a_eval + beta * zeta + gamma)
             * (b_eval + beta * zeta * K1() + gamma)
             * (c_eval + beta * zeta * K2() + gamma)
             - (&pre_in.qs3_x * beta + gamma + c_eval)
-            * (a_eval + beta * s_sig1 + gamma)
-            * (b_eval + beta * s_sig2 + gamma)
-            * z_omega)
+                * (a_eval + beta * s_sig1 + gamma)
+                * (b_eval + beta * s_sig2 + gamma)
+                * z_omega)
             * alpha;
         linearisation_poly += (&permutation_polynomial + Scalar::one().neg())
             * pre_in.constraints.lagrange_basis(0).eval(&zeta)
@@ -267,11 +277,11 @@ impl Prover {
             * alpha;
         linearisation_poly = &linearisation_poly
             - (quotient_low
-            + quotient_mid
-            * zeta.pow_vartime([pre_in.constraints.nr_constraints as u64, 0, 0, 0])
-            + quotient_high
-            * zeta.pow_vartime([2 * pre_in.constraints.nr_constraints as u64, 0, 0, 0]))
-            * pre_in.blinder_polynomial.eval(&zeta);
+                + quotient_mid
+                    * zeta.pow_vartime([pre_in.constraints.nr_constraints as u64, 0, 0, 0])
+                + quotient_high
+                    * zeta.pow_vartime([2 * pre_in.constraints.nr_constraints as u64, 0, 0, 0]))
+                * pre_in.blinder_polynomial.eval(&zeta);
 
         // Now we compute the opening proof polynomial:
         let mut w_omega = linearisation_poly.clone();
@@ -338,7 +348,7 @@ mod test {
     use crate::transcript::Transcript;
     use blstrs::Scalar;
 
-    fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace) {
+    fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace, Vec<Scalar>) {
         // We are going to begin with a simple proof, showing that I know the value of
         // a pythagorean triplet. i.e., three values such that x^2 + y^2 = z^2;
         let mut circuit = PlonkCircuit::init();
@@ -381,12 +391,12 @@ mod test {
         }
         .pad_next_power_two();
 
-        (setup, computation_trace)
+        (setup, computation_trace, Vec::with_capacity(0))
     }
     #[test]
     fn test_prover() {
         let mut transcript = Transcript::new(b"testing the prover");
-        let (pre_in, trace) = create_dummy_circuit_and_prover_key();
-        let _proof = Prover::prove(&pre_in, &trace, &mut transcript);
+        let (pre_in, trace, pub_in) = create_dummy_circuit_and_prover_key();
+        let _proof = Prover::prove(&pub_in, &pre_in, &trace, &mut transcript);
     }
 }
