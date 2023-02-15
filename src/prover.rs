@@ -62,7 +62,6 @@ impl Prover {
         extended_witness.extend_from_slice(&prover_key.b);
         extended_witness.extend_from_slice(&prover_key.c);
 
-        // we check that the permutation validates
         for (&key, &value) in pre_in.constraints.permutations.iter() {
             assert_eq!(
                 extended_witness[key], extended_witness[value],
@@ -359,6 +358,10 @@ mod test {
         circuit.mult_gate(); // y * y = y^2
         circuit.mult_gate(); // z * z = z^2
         circuit.add_gate(); // x^2 + y^2 = z^2
+
+        // Gates are finished, so here we pad to the next power of two
+        circuit.pad_next_power_of_two();
+
         circuit.connect_wires(&0, &4);
         circuit.connect_wires(&3, &8);
         circuit.connect_wires(&1, &5);

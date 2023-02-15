@@ -166,6 +166,14 @@ impl PlonkCircuit {
         self.nr_constraints += 1;
     }
 
+    // Pad to the next power of two
+    pub fn pad_next_power_of_two(&mut self) {
+        // we first pad the number of constraints to the next power of two. we do so by adding zero constraints
+        while (self.nr_constraints & (self.nr_constraints - 1)) != 0 {
+            self.add_gate();
+        }
+    }
+
     // This should always be called after creating the gates.
     pub fn connect_wires(&mut self, in_wire: &usize, out_wire: &usize) {
         assert!(*in_wire < self.nr_wires && *out_wire < self.nr_wires, "The circuit does not have enough wires for these two. Max {0}, got {in_wire} and {out_wire}", self.nr_wires);
@@ -196,11 +204,6 @@ impl PlonkCircuit {
     }
 
     pub fn setup(&mut self) -> PreprocessedInput {
-        // we first pad the number of constraints to the next power of two. we do so by adding zero constraints
-        while (self.nr_constraints & (self.nr_constraints - 1)) != 0 {
-            self.add_gate();
-        }
-
         // For simplicity, we begin computing our extended subgroup H'. We need an nth root of unity with
         // n being the number of constraints. We compute this root of unity out of the 2^32nd
         // root of unity, g, which is provided as a constant in the underlying library. We do so

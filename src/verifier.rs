@@ -157,21 +157,24 @@ mod test {
         circuit.mult_gate(); // z * y = v
         circuit.add_gate(); // v + z^2 = res
 
-        // Circuit is finished, so we set it up before connecting the wires (this handles the padding)
-        let setup = circuit.setup();
+        // Gates are finished, so here we pad to the next power of two
+        circuit.pad_next_power_of_two();
 
         // We need to connect the wires with the padded trace:
-        circuit.connect_wires(&2, &1); // Connecting PI with x^2
+        circuit.connect_wires(&0, &4); // Connecting PI with x^2
         circuit.connect_wires(&1, &9);
         circuit.connect_wires(&17, &4);
         circuit.connect_wires(&2, &10);
         circuit.connect_wires(&18, &12);
         circuit.connect_wires(&3, &11);
-        circuit.connect_wires(&17, &18);
+        circuit.connect_wires(&19, &20);
         circuit.connect_wires(&3, &5);
         circuit.connect_wires(&2, &13);
-        circuit.connect_wires(&19, &6);
-        circuit.connect_wires(&17, &14);
+        circuit.connect_wires(&21, &6);
+        circuit.connect_wires(&19, &14);
+
+        // Circuit is finished, so we set it up
+        let setup = circuit.setup();
 
         // We put as a public input that the first square (x^2) needs to be 9
         let pub_in = vec![Scalar::from(9)];
