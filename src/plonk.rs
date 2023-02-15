@@ -177,8 +177,10 @@ impl PlonkCircuit {
     // This should always be called after creating the gates.
     pub fn connect_wires(&mut self, in_wire: &usize, out_wire: &usize) {
         assert!(*in_wire < self.nr_wires && *out_wire < self.nr_wires, "The circuit does not have enough wires for these two. Max {0}, got {in_wire} and {out_wire}", self.nr_wires);
-        let end = self.permutations.insert(*in_wire, *out_wire).unwrap(); // we know each key is populated
-        self.permutations.insert(*out_wire, end);
+        let in_rel = self.permutations.get(in_wire).unwrap().clone(); // we know each key is populated
+        let out_rel = self.permutations.get(out_wire).unwrap().clone(); // we know each key is populated
+        self.permutations.insert(*in_wire, out_rel);
+        self.permutations.insert(*out_wire, in_rel);
     }
 
     pub fn lagrange_basis(&self, index: usize) -> Polynomial {

@@ -161,7 +161,7 @@ mod test {
         circuit.pad_next_power_of_two();
 
         // We need to connect the wires with the padded trace:
-        circuit.connect_wires(&0, &4); // Connecting PI with x^2
+        circuit.connect_wires(&0, &17); // Connecting PI with x^2
         circuit.connect_wires(&1, &9);
         circuit.connect_wires(&17, &4);
         circuit.connect_wires(&2, &10);
