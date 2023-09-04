@@ -1,8 +1,8 @@
-use blake2::{Blake2b, Digest};
+use blake2::{Blake2b, Digest, digest::consts::U32};
 use blstrs::{G1Affine, Scalar};
 
 #[derive(Clone)]
-pub struct Transcript(Blake2b);
+pub struct Transcript(Blake2b<U32>);
 
 impl Transcript {
     pub fn new(label: &'static [u8]) -> Transcript {
