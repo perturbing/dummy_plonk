@@ -221,7 +221,9 @@ mod test {
         let (pre_in, trace, pub_in) = create_dummy_circuit_and_prover_key();
 
         let proof = Prover::prove(&pub_in, &pre_in, &trace, &mut prover_transcript);
-
+        
+        println!("{:?}",proof);
+        
         assert!(PlonkVerifier::verify(&pub_in, &pre_in, &proof, &mut verifier_transcript).is_ok());
     }
 }

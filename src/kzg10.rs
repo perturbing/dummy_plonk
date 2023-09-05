@@ -15,7 +15,7 @@ pub struct Kzg10<const MAX_GATES: usize> {
     pub powers_x_g2: [G2Affine; 2],         // we only have power 0 and 1
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Kzg10Commitment(pub(crate) G1Affine);
 
 pub struct Kzg10BatchProof(Kzg10Commitment, Kzg10Commitment);

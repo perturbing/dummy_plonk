@@ -9,6 +9,7 @@ use std::ops::Neg;
 
 pub struct Prover;
 
+#[derive(Debug)]
 pub struct PlonkProof {
     pub commitment_a: Kzg10Commitment,
     pub commitment_b: Kzg10Commitment,
