@@ -31,6 +31,7 @@ impl PlonkVerifier {
         transcript.append_point(b"commitment c", &proof.commitment_c.0);
 
         let beta = transcript.challenge_scalar(b"beta");
+        // println!("beta hash: {:?}",beta);
         let gamma = transcript.challenge_scalar(b"gamma");
 
         transcript.append_point(b"Permutation polynomial", &proof.commitment_z.0);
@@ -223,11 +224,17 @@ mod test {
 
         let proof = Prover::prove(&pub_in, &pre_in, &trace, &mut prover_transcript);
         
-        // println!("{:?}",proof);
-        // let proof_json = to_string_pretty(&proof).expect("Failed to serialize the proof");
         let proof_json = serde_json::to_string_pretty(&proof).expect("Failed to serialize the proof");
-        println!("{}", proof_json);
+        // println!("{}", proof_json);
         
         assert!(PlonkVerifier::verify(&pub_in, &pre_in, &proof, &mut verifier_transcript).is_ok());
+    }
+
+    #[test]
+    fn test_transcript_hash() {
+        let mut test_transcript = Transcript::new(b"");
+        let scalar = test_transcript.challenge_scalar(b"");
+        println!("MyTest {:?}", scalar);
+        assert!(1 == 1);
     }
 }
