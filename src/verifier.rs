@@ -6,6 +6,7 @@ use blstrs::{pairing, Scalar};
 use ff::Field;
 use group::Curve;
 use std::ops::Neg;
+use serde_json::to_string_pretty;
 
 pub struct PlonkVerifier;
 
@@ -222,7 +223,10 @@ mod test {
 
         let proof = Prover::prove(&pub_in, &pre_in, &trace, &mut prover_transcript);
         
-        println!("{:?}",proof);
+        // println!("{:?}",proof);
+        // let proof_json = to_string_pretty(&proof).expect("Failed to serialize the proof");
+        let proof_json = serde_json::to_string_pretty(&proof).expect("Failed to serialize the proof");
+        println!("{}", proof_json);
         
         assert!(PlonkVerifier::verify(&pub_in, &pre_in, &proof, &mut verifier_transcript).is_ok());
     }

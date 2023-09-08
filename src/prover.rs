@@ -6,10 +6,12 @@ use blstrs::Scalar;
 use ff::Field;
 use rand_core::OsRng;
 use std::ops::Neg;
+use serde::Deserialize;
+use serde::Serialize;
 
 pub struct Prover;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PlonkProof {
     pub commitment_a: Kzg10Commitment,
     pub commitment_b: Kzg10Commitment,

@@ -9,13 +9,15 @@ use group::Curve;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use std::ops::{Add, Mul, Neg};
+use serde::Deserialize;
+use serde::Serialize;
 
 pub struct Kzg10<const MAX_GATES: usize> {
     pub powers_x_g1: [G1Affine; MAX_GATES], // This will have as size the max number of gates allowed.
     pub powers_x_g2: [G2Affine; 2],         // we only have power 0 and 1
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Kzg10Commitment(pub(crate) G1Affine);
 
 pub struct Kzg10BatchProof(Kzg10Commitment, Kzg10Commitment);
