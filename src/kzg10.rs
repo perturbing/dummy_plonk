@@ -12,6 +12,7 @@ use std::ops::{Add, Mul, Neg};
 use serde::Deserialize;
 use serde::Serialize;
 
+#[derive(Debug)]
 pub struct Kzg10<const MAX_GATES: usize> {
     pub powers_x_g1: [G1Affine; MAX_GATES], // This will have as size the max number of gates allowed.
     pub powers_x_g2: [G2Affine; 2],         // we only have power 0 and 1

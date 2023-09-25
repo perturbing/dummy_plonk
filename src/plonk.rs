@@ -67,7 +67,7 @@ impl ComputationTrace {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default,Debug)]
 pub struct Constraints {
     pub qm: Vec<Scalar>,
     pub ql: Vec<Scalar>,
@@ -76,7 +76,7 @@ pub struct Constraints {
     pub qc: Vec<Scalar>,
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct PlonkCircuit {
     pub extended_h_subgroup: Vec<Scalar>,
     pub constraints: Constraints,
@@ -87,6 +87,7 @@ pub struct PlonkCircuit {
 
 pub struct PlonkConstraintSystem(ComputationTrace, PlonkCircuit);
 
+#[derive(Debug)]
 pub struct PreprocessedInput {
     pub kzg_set: Kzg10<128>, // We could make this generic, but it's only going to complicate the code.
     pub blinder_polynomial: Polynomial,

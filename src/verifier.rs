@@ -6,7 +6,6 @@ use blstrs::{pairing, Scalar};
 use ff::Field;
 use group::Curve;
 use std::ops::Neg;
-use serde_json::to_string_pretty;
 
 pub struct PlonkVerifier;
 
@@ -31,18 +30,21 @@ impl PlonkVerifier {
         transcript.append_point(b"commitment c", &proof.commitment_c.0);
 
         let beta = transcript.challenge_scalar(b"beta");
-        // println!("beta hash: {:?}",beta);
+        // println!("beta: {:?}", beta);
         let gamma = transcript.challenge_scalar(b"gamma");
+        // println!("gamma: {:?}", gamma);
 
         transcript.append_point(b"Permutation polynomial", &proof.commitment_z.0);
 
         let alpha = transcript.challenge_scalar(b"alpha");
+        // println!("alpha: {:?}", alpha);
 
         transcript.append_point(b"Quotient low polynomial", &proof.t_low.0);
         transcript.append_point(b"Quotient mid polynomial", &proof.t_mid.0);
         transcript.append_point(b"Quotient high polynomial", &proof.t_high.0);
 
         let zeta = transcript.challenge_scalar(b"zeta");
+        // println!("zeta: {:?}", zeta);
 
         transcript.append_scalar(b"Append a_eval.", &proof.a_eval);
         transcript.append_scalar(b"Append b_eval.", &proof.b_eval);
@@ -52,11 +54,13 @@ impl PlonkVerifier {
         transcript.append_scalar(b"Append z_omega.", &proof.z_omega);
 
         let v = transcript.challenge_scalar(b"v");
+        // println!("v: {:?}", v);
 
         transcript.append_point(b"w_omega comm", &proof.w_omega.0);
         transcript.append_point(b"w_omega_zeta comm", &proof.w_omega_zeta.0);
 
         let u = transcript.challenge_scalar(b"u");
+        // println!("u: {:?}", u);
 
         let zero_poly_eval = pre_in.blinder_polynomial.eval(&zeta);
 
@@ -66,6 +70,7 @@ impl PlonkVerifier {
             .enumerate()
             .map(|(index, s)| s * pre_in.constraints.lagrange_basis(index).eval(&zeta))
             .sum();
+        println!("pi is: {:?}",pi_eval);
 
         // Now we split r into its constant and non-constant terms.
         let r0 = pi_eval.neg()
@@ -137,11 +142,35 @@ impl PlonkVerifier {
 
 #[cfg(test)]
 mod test {
-    use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
+    use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput, K1, K2};
     use crate::prover::Prover;
     use crate::transcript::Transcript;
     use crate::verifier::PlonkVerifier;
     use blstrs::Scalar;
+    use serde::Deserialize;
+    use serde::Serialize;
+    use blstrs::G2Affine;
+    // use std::ops::Neg;
+    // use ff::Field;
+    use crate::verifier::Kzg10Commitment;
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct PreInputs {
+        n_public: i64,
+        power: i64,
+        k1: Scalar,
+        k2: Scalar,
+        q_m: Kzg10Commitment,
+        q_l: Kzg10Commitment,
+        q_r: Kzg10Commitment,
+        q_o: Kzg10Commitment,
+        q_c: Kzg10Commitment,
+        s_sig1_pre_in: Kzg10Commitment,
+        s_sig2_pre_in: Kzg10Commitment,
+        s_sig3_pre_in: Kzg10Commitment,
+        x2: G2Affine,
+        generator: Scalar,
+    }
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace, Vec<Scalar>) {
         // We are going to begin with a simple proof, showing that I know the value of
@@ -225,16 +254,29 @@ mod test {
         let proof = Prover::prove(&pub_in, &pre_in, &trace, &mut prover_transcript);
         
         let proof_json = serde_json::to_string_pretty(&proof).expect("Failed to serialize the proof");
-        // println!("{}", proof_json);
+        // printing a json representation of a test vector proof
+        println!("{}", proof_json);
+
+        // creating a well formatted pre inputs that we can export as a test vector by printing it
+        let pre_in_formatted = PreInputs {
+            n_public: 1,
+            power: 3,
+            k1: K1(),
+            k2: K2(),
+            q_m: pre_in.kzg_set.commit(&pre_in.qm_x),
+            q_l: pre_in.kzg_set.commit(&pre_in.ql_x),
+            q_r: pre_in.kzg_set.commit(&pre_in.qr_x),
+            q_o: pre_in.kzg_set.commit(&pre_in.qo_x),
+            q_c: pre_in.kzg_set.commit(&pre_in.qc_x),
+            s_sig1_pre_in: pre_in.kzg_set.commit(&pre_in.qs1_x),
+            s_sig2_pre_in: pre_in.kzg_set.commit(&pre_in.qs2_x),
+            s_sig3_pre_in: pre_in.kzg_set.commit(&pre_in.qs3_x),
+            x2: pre_in.kzg_set.powers_x_g2[1],
+            generator: pre_in.constraints.extended_h_subgroup[0],
+        };
+        let pre_in_json = serde_json::to_string_pretty(&pre_in_formatted).expect("Failed to serialize the proof");
+        println!("{}", pre_in_json);
         
         assert!(PlonkVerifier::verify(&pub_in, &pre_in, &proof, &mut verifier_transcript).is_ok());
-    }
-
-    #[test]
-    fn test_transcript_hash() {
-        let mut test_transcript = Transcript::new(b"");
-        let scalar = test_transcript.challenge_scalar(b"");
-        println!("MyTest {:?}", scalar);
-        assert!(1 == 1);
     }
 }
