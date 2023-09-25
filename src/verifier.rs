@@ -80,6 +80,7 @@ impl PlonkVerifier {
                 * (proof.b_eval + beta * proof.s_sig2 + gamma)
                 * (proof.c_eval + gamma)
                 * proof.z_omega;
+        println!("r0 is: {:?}", r0);
 
         let batch_poly_commit_1 = proof.a_eval * proof.b_eval * qm_comm
             + proof.a_eval * ql_comm
@@ -110,11 +111,14 @@ impl PlonkVerifier {
                             0,
                             0,
                         ]));
+        
+        println!("batchedPolyCommitG1 is: {:?}", batch_poly_commit_1);
 
         let batch_poly_commit_full = batch_poly_commit_1
             + v * (&proof.commitment_a
                 + v * (&proof.commitment_b
                     + v * (&proof.commitment_c + v * (&s_sig1 + v * (&s_sig2)))));
+        println!("batchedPolyCommitFull is: {:?}", batch_poly_commit_full);
 
         let group_encoded_batch_eval = pre_in.kzg_set.powers_x_g1[0]
             * (r0.neg()
@@ -122,6 +126,7 @@ impl PlonkVerifier {
                     + v * (proof.b_eval
                         + v * (proof.c_eval + v * (proof.s_sig1 + v * proof.s_sig2))))
                 + u * proof.z_omega);
+        println!("groupEncodedBatchEval is: {:?}", group_encoded_batch_eval.to_affine());
 
         let lhs_g1 = &proof.w_omega + u * &proof.w_omega_zeta;
         let rhs_g2 = zeta * &proof.w_omega
@@ -157,9 +162,9 @@ mod test {
     #[derive(Serialize, Deserialize, Debug)]
     struct PreInputs {
         n_public: i64,
-        power: i64,
-        k1: Scalar,
-        k2: Scalar,
+        pow: i64,
+        k_1: Scalar,
+        k_2: Scalar,
         q_m: Kzg10Commitment,
         q_l: Kzg10Commitment,
         q_r: Kzg10Commitment,
@@ -168,8 +173,8 @@ mod test {
         s_sig1_pre_in: Kzg10Commitment,
         s_sig2_pre_in: Kzg10Commitment,
         s_sig3_pre_in: Kzg10Commitment,
-        x2: G2Affine,
-        generator: Scalar,
+        x_2: G2Affine,
+        gen: Scalar,
     }
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace, Vec<Scalar>) {
@@ -260,9 +265,9 @@ mod test {
         // creating a well formatted pre inputs that we can export as a test vector by printing it
         let pre_in_formatted = PreInputs {
             n_public: 1,
-            power: 3,
-            k1: K1(),
-            k2: K2(),
+            pow: 3,
+            k_1: K1(),
+            k_2: K2(),
             q_m: pre_in.kzg_set.commit(&pre_in.qm_x),
             q_l: pre_in.kzg_set.commit(&pre_in.ql_x),
             q_r: pre_in.kzg_set.commit(&pre_in.qr_x),
@@ -271,8 +276,8 @@ mod test {
             s_sig1_pre_in: pre_in.kzg_set.commit(&pre_in.qs1_x),
             s_sig2_pre_in: pre_in.kzg_set.commit(&pre_in.qs2_x),
             s_sig3_pre_in: pre_in.kzg_set.commit(&pre_in.qs3_x),
-            x2: pre_in.kzg_set.powers_x_g2[1],
-            generator: pre_in.constraints.extended_h_subgroup[0],
+            x_2: pre_in.kzg_set.powers_x_g2[1],
+            gen: pre_in.constraints.extended_h_subgroup[0],
         };
         let pre_in_json = serde_json::to_string_pretty(&pre_in_formatted).expect("Failed to serialize the proof");
         println!("{}", pre_in_json);
