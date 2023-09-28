@@ -38,7 +38,7 @@ impl Prover {
         let mut pi = Polynomial::zero(public_in.len());
         for (i, input) in public_in.iter().enumerate() {
             let lp = pre_in.constraints.lagrange_basis(i);
-            pi += lp * input.neg();
+            pi += lp * input;
         }
 
         // We first compute the random scalars, that we don't compute randomly for debugging.
