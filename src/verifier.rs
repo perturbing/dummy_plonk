@@ -30,21 +30,21 @@ impl PlonkVerifier {
         transcript.append_point(b"commitment c", &proof.commitment_c.0);
 
         let beta = transcript.challenge_scalar(b"beta");
-        // println!("beta: {:?}", beta);
+        println!("beta: {:?}", beta);
         let gamma = transcript.challenge_scalar(b"gamma");
-        // println!("gamma: {:?}", gamma);
+        println!("gamma: {:?}", gamma);
 
         transcript.append_point(b"Permutation polynomial", &proof.commitment_z.0);
 
         let alpha = transcript.challenge_scalar(b"alpha");
-        // println!("alpha: {:?}", alpha);
+        println!("alpha: {:?}", alpha);
 
         transcript.append_point(b"Quotient low polynomial", &proof.t_low.0);
         transcript.append_point(b"Quotient mid polynomial", &proof.t_mid.0);
         transcript.append_point(b"Quotient high polynomial", &proof.t_high.0);
 
         let zeta = transcript.challenge_scalar(b"zeta");
-        // println!("zeta: {:?}", zeta);
+        println!("zeta: {:?}", zeta);
 
         transcript.append_scalar(b"Append a_eval.", &proof.a_eval);
         transcript.append_scalar(b"Append b_eval.", &proof.b_eval);
@@ -54,13 +54,13 @@ impl PlonkVerifier {
         transcript.append_scalar(b"Append z_omega.", &proof.z_omega);
 
         let v = transcript.challenge_scalar(b"v");
-        // println!("v: {:?}", v);
+        println!("v: {:?}", v);
 
         transcript.append_point(b"w_omega comm", &proof.w_omega.0);
         transcript.append_point(b"w_omega_zeta comm", &proof.w_omega_zeta.0);
 
         let u = transcript.challenge_scalar(b"u");
-        // println!("u: {:?}", u);
+        println!("u: {:?}", u);
 
         let zero_poly_eval = pre_in.blinder_polynomial.eval(&zeta);
 
@@ -304,11 +304,11 @@ mod test {
 
         let num = w * z_hand;
         let den = Scalar::from(8) * (x - w);
-        println!("using trick: {:?}", num * den.invert().unwrap());
+        // println!("using trick: {:?}", num * den.invert().unwrap());
 
 
         let full_calc = pre_in.constraints.lagrange_basis(0).eval(&x);
-        println!("using constraints basis: {:?}", full_calc);
+        // println!("using constraints basis: {:?}", full_calc);
 
         assert!(full_calc == num * den.invert().unwrap());
     }

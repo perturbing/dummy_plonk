@@ -1,7 +1,7 @@
 use blake2::{Blake2b, Digest, digest::consts::U32};
 use blstrs::{G1Affine, Scalar};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Transcript(Blake2b<U32>);
 
 impl Transcript {
@@ -28,14 +28,16 @@ impl Transcript {
 
     pub fn append_scalar(&mut self, label: &'static [u8], message: &Scalar) {
         self.0.update(label);
-        self.0.update(message.to_bytes_be());
+        self.0.update(message.to_bytes_le());
     }
 
     pub fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
         let mut scalar_bytes = [0u8; 32];
         self.0.update(label);
-        scalar_bytes[1..].copy_from_slice(&self.clone().0.finalize().to_vec()[1..32]);
-        Scalar::from_bytes_be(&scalar_bytes).unwrap()
+        let hash_bytes = self.clone().0.finalize().to_vec();
+        let truncated_bytes = &hash_bytes[0..31];
+        scalar_bytes[..31].copy_from_slice(truncated_bytes);
+        Scalar::from_bytes_le(&scalar_bytes).unwrap()
     }
 }
 
@@ -58,6 +60,7 @@ mod tests {
             &Scalar::random(ChaCha20Rng::from_seed([0u8; 32])),
         );
 
-        let _result = transcript.challenge_scalar(b"End");
+        let result = transcript.challenge_scalar(b"End");
+        println!("challange result: {:?}",result)
     }
 }
