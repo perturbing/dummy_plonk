@@ -73,7 +73,7 @@ impl PlonkVerifier {
         println!("pi is: {:?}",pi_eval);
 
         // Now we split r into its constant and non-constant terms.
-        let r0 = pi_eval.neg()
+        let r0 = pi_eval
             + pre_in.constraints.lagrange_basis(0).eval(&zeta).neg() * alpha * alpha
             + alpha.neg()
                 * (proof.a_eval + beta * proof.s_sig1 + gamma)
@@ -147,11 +147,17 @@ impl PlonkVerifier {
 
 #[cfg(test)]
 mod test {
+<<<<<<< HEAD
     use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput, K1, K2};
+=======
+    use std::ops::Neg;
+    use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
+>>>>>>> upstream/main
     use crate::prover::Prover;
     use crate::transcript::Transcript;
     use crate::verifier::PlonkVerifier;
     use blstrs::Scalar;
+<<<<<<< HEAD
     use serde::Deserialize;
     use serde::Serialize;
     use blstrs::G2Affine;
@@ -176,6 +182,9 @@ mod test {
         x_2: G2Affine,
         gen: Scalar,
     }
+=======
+    use ff::Field;
+>>>>>>> upstream/main
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace, Vec<Scalar>) {
         // We are going to begin with a simple proof, showing that I know the value of
@@ -213,7 +222,7 @@ mod test {
         let setup = circuit.setup();
 
         // We put as a public input that the first square (x^2) needs to be 9
-        let pub_in = vec![Scalar::from(9)];
+        let pub_in = vec![Scalar::from(9).neg()];
 
         // As a computation trace, we'll create the proof for the values (3,4,5)
         let computation_trace = ComputationTrace {
@@ -283,5 +292,33 @@ mod test {
         println!("{}", pre_in_json);
         
         assert!(PlonkVerifier::verify(&pub_in, &pre_in, &proof, &mut verifier_transcript).is_ok());
+    }
+    #[test]
+    fn test_lb() {
+        // initiate a plonk test
+        let (pre_in, _, _) = create_dummy_circuit_and_prover_key();
+
+        // get the generator of H
+        let w = pre_in.constraints.extended_h_subgroup[0];
+        println!("w: {:?}",w); // this w, the generator of H
+
+        // set a point for exaluation
+        let x = Scalar::from(10);
+        // for readability calculate 8th power of x here
+        let x8 = x.pow_vartime([pre_in.constraints.nr_constraints as u64, 0, 0, 0]);
+
+        // test Z_(X)
+        // let z = pre_in.blinder_polynomial.eval(&x);
+        let z_hand = x8 - Scalar::from(1);
+
+        let num = w * z_hand;
+        let den = Scalar::from(8) * (x - w);
+        println!("using trick: {:?}", num * den.invert().unwrap());
+
+
+        let full_calc = pre_in.constraints.lagrange_basis(0).eval(&x);
+        println!("using constraints basis: {:?}", full_calc);
+
+        assert!(full_calc == num * den.invert().unwrap());
     }
 }
