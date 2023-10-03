@@ -147,22 +147,16 @@ impl PlonkVerifier {
 
 #[cfg(test)]
 mod test {
-<<<<<<< HEAD
     use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput, K1, K2};
-=======
     use std::ops::Neg;
-    use crate::plonk::{ComputationTrace, PlonkCircuit, PreprocessedInput};
->>>>>>> upstream/main
     use crate::prover::Prover;
     use crate::transcript::Transcript;
     use crate::verifier::PlonkVerifier;
     use blstrs::Scalar;
-<<<<<<< HEAD
     use serde::Deserialize;
     use serde::Serialize;
     use blstrs::G2Affine;
-    // use std::ops::Neg;
-    // use ff::Field;
+    use ff::Field;
     use crate::verifier::Kzg10Commitment;
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -182,9 +176,6 @@ mod test {
         x_2: G2Affine,
         gen: Scalar,
     }
-=======
-    use ff::Field;
->>>>>>> upstream/main
 
     fn create_dummy_circuit_and_prover_key() -> (PreprocessedInput, ComputationTrace, Vec<Scalar>) {
         // We are going to begin with a simple proof, showing that I know the value of
